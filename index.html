@@ -3,315 +3,462 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Traza — monitor sísmico mundial</title>
-<meta name="description" content="Sismos del mundo en tiempo real, por regiones de Latinoamérica, con pronóstico estadístico de tasas.">
-<meta name="theme-color" content="#0B1420">
+<title>Traza · monitor sísmico</title>
+<meta name="description" content="Sismos del mundo en tiempo real, por regiones de Latinoamérica, con estadística de tasas e historial de décadas.">
+<meta name="theme-color" content="#070C12">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-  :root{
-    --abismo:#0B1420; --placa:#131F2C; --placa-alta:#1A2938; --linea:#24384C;
-    --tiza:#E8EDF2; --nota:#7C93A8;
-    --p0:#FF3B30; --p1:#FF8A1F; --p2:#FFD60A; --p3:#3DD68C; --p4:#3B9EFF;
-    --radio:3px;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{background:var(--abismo);color:var(--tiza)}
-  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45;
-    -webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
-  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
-  .wrap{max-width:1080px;margin:0 auto;padding:0 14px}
-  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
-  a{color:var(--p4)}
-  h2,h3,.cond{font-family:"Barlow Condensed",system-ui,sans-serif;text-transform:uppercase;letter-spacing:.1em}
+/* ═══════════════ fichas de diseño ═══════════════
+   El instrumento es una carcasa fría de tinta con una tira de papel
+   cálida adentro: el registro se imprime en papel, todo lo demás es metal. */
+:root{
+  --tinta:#070C12;        /* carcasa */
+  --chasis:#0E1620;       /* paneles */
+  --chasis-alto:#16212E;  /* superficie elevada / hover */
+  --filo:#1E2E3F;         /* filetes */
+  --filo-vivo:#2C4459;
 
-  /* barra */
-  .barra{position:sticky;top:0;z-index:900;background:rgba(11,20,32,.94);
-    backdrop-filter:blur(10px);border-bottom:1px solid var(--linea)}
-  .barra .wrap{display:flex;align-items:center;gap:10px;height:50px}
-  .marca{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:21px;
-    letter-spacing:.14em;text-transform:uppercase;line-height:1}
-  .marca span{color:var(--p0)}
-  .estado{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:11px;color:var(--nota)}
-  .punto{width:7px;height:7px;border-radius:50%;background:var(--nota);flex:none}
-  .punto.vivo{background:var(--p3);animation:latido 2.4s infinite}
-  .punto.mal{background:var(--p0)}
-  @keyframes latido{0%{box-shadow:0 0 0 0 rgba(61,214,140,.6)}70%{box-shadow:0 0 0 7px rgba(61,214,140,0)}100%{box-shadow:0 0 0 0 rgba(61,214,140,0)}}
-  .icono-btn{padding:6px;border-radius:var(--radio);color:var(--nota);line-height:0}
-  .icono-btn:hover{color:var(--tiza);background:var(--placa-alta)}
-  .icono-btn.on{color:var(--p3)}
+  --papel:#E9E0CC;        /* tira de registro */
+  --papel-linea:#CFC3A6;
+  --papel-tinta:#2B2A26;
 
-  /* chips de region */
-  .chips{border-bottom:1px solid var(--linea);background:var(--placa);overflow-x:auto;
-    -webkit-overflow-scrolling:touch;scrollbar-width:none}
-  .chips::-webkit-scrollbar{display:none}
-  .chips-int{display:flex;gap:6px;padding:9px 14px;max-width:1080px;margin:0 auto;width:max-content;min-width:100%}
-  .chip{white-space:nowrap;padding:5px 12px;border:1px solid var(--linea);border-radius:100px;
-    font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.07em;
-    text-transform:uppercase;color:var(--nota)}
-  .chip:hover{color:var(--tiza);border-color:var(--nota)}
-  .chip.activo{background:var(--tiza);border-color:var(--tiza);color:var(--abismo)}
-  .chip b{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;opacity:.65;margin-left:5px}
+  --tiza:#EDF1F5;
+  --nota:#7B93A3;
+  --nota-baja:#546878;
 
-  /* pestañas */
-  .pestanas{display:flex;border-bottom:1px solid var(--linea);max-width:1080px;margin:0 auto}
-  .pestana{flex:1;padding:11px 3px;font-family:"Barlow Condensed",sans-serif;font-weight:600;
-    font-size:12.5px;letter-spacing:.06em;white-space:nowrap;text-transform:uppercase;color:var(--nota);
-    border-bottom:2px solid transparent;margin-bottom:-1px}
-  .pestana.activa{color:var(--tiza);border-bottom-color:var(--p0)}
+  --p0:#FF4433; --p1:#FF9500; --p2:#F5C518; --p3:#35C77F; --p4:#3E9BFF;
 
-  /* traza */
-  .traza-caja{border-bottom:1px solid var(--linea);background:var(--placa)}
-  .traza-caja .wrap{padding:10px 14px 8px}
-  #traza{display:block;width:100%;height:88px;cursor:crosshair;touch-action:pan-y}
-  .traza-pie{display:flex;justify-content:space-between;font-size:10px;color:var(--nota);
-    margin-top:3px;font-family:"IBM Plex Mono",monospace}
+  --r:4px; --r-g:10px;
+  --cab:46px; --nav:60px;
+  --sombra:0 1px 0 rgba(255,255,255,.03), 0 8px 24px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--tinta);-webkit-text-size-adjust:100%}
+body{
+  background:var(--tinta);color:var(--tiza);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  padding-bottom:calc(var(--nav) + env(safe-area-inset-bottom));
+  overscroll-behavior-y:none;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;text-align:left}
+a{color:var(--p4);text-decoration-color:rgba(62,155,255,.35);text-underline-offset:2px}
+canvas{display:block}
+:focus-visible{outline:2px solid var(--p2);outline-offset:2px;border-radius:2px}
+.oculto{display:none!important}
+.solo-lector{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
-  /* destacado */
-  .destacado{border-bottom:1px solid var(--linea)}
-  .destacado .wrap{padding:16px 14px 18px;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
-  .mag-grande{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:70px;
-    line-height:.82;letter-spacing:-.02em;flex:none}
-  .mag-grande small{display:block;font-size:10.5px;letter-spacing:.18em;color:var(--nota);
-    font-weight:600;margin-bottom:6px}
-  .detalle{flex:1 1 240px;min-width:200px}
-  .detalle h1{font-size:17px;font-weight:600;line-height:1.25;margin-bottom:7px;text-wrap:balance}
-  .campos{display:flex;flex-wrap:wrap;gap:5px 18px;font-size:12.5px;color:var(--nota);
-    font-family:"IBM Plex Mono",monospace}
-  .campos b{color:var(--tiza);font-weight:500}
-  .aviso-mmi{margin-top:9px;font-size:12px;color:var(--nota);border-left:2px solid var(--linea);padding-left:9px}
+/* tipografía */
+.dis{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-variation-settings:"wdth" 85;letter-spacing:-.015em}
+.dat{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.rotulo{font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--nota-baja)}
 
-  #mapa{height:320px;border-bottom:1px solid var(--linea);background:#0d1a26;z-index:1}
-  .leaflet-container{background:#0d1a26;font-family:inherit}
-  .leaflet-control-attribution{background:rgba(11,20,32,.8)!important;color:var(--nota)!important;font-size:9px!important}
-  .leaflet-control-attribution a{color:var(--nota)!important}
-  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--placa-alta);color:var(--tiza);
-    border-radius:var(--radio);box-shadow:0 6px 24px rgba(0,0,0,.5)}
-  .leaflet-popup-content{margin:10px 12px;font-size:13px}
+.marco{max-width:1360px;margin:0 auto;padding:0 16px}
 
-  /* panel de controles */
-  .panel{border-bottom:1px solid var(--linea);background:var(--placa)}
-  .panel .wrap{padding:14px}
-  .rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px}
-  .campo label{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11px;
-    letter-spacing:.1em;text-transform:uppercase;color:var(--nota);margin-bottom:5px}
-  .campo label b{color:var(--tiza);font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:0}
-  input[type=range]{width:100%;accent-color:var(--p1);height:22px}
-  select{width:100%;background:var(--abismo);border:1px solid var(--linea);color:var(--tiza);
-    padding:7px 9px;border-radius:var(--radio);font-size:14px}
-  :focus-visible{outline:2px solid var(--p2);outline-offset:2px}
-  .fila-btn{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-  .btn{border:1px solid var(--linea);padding:8px 13px;border-radius:var(--radio);
-    font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:13px;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--nota)}
-  .btn:hover{border-color:var(--nota);color:var(--tiza)}
-  .btn.activo{background:var(--p3);border-color:var(--p3);color:#06231a}
+/* ═══════════════ cabecera ═══════════════ */
+.cab{position:sticky;top:0;z-index:800;background:rgba(7,12,18,.88);
+  backdrop-filter:blur(14px) saturate(1.4);border-bottom:1px solid var(--filo)}
+.cab-int{display:flex;align-items:center;gap:12px;height:var(--cab);max-width:1360px;margin:0 auto;padding:0 16px}
+.logo{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:19px;
+  font-variation-settings:"wdth" 78;letter-spacing:.2em;text-transform:uppercase;line-height:1;flex:none}
+.logo em{font-style:normal;color:var(--p0)}
+.pulso{display:flex;align-items:center;gap:7px;margin-left:auto;flex:none}
+.led{width:6px;height:6px;border-radius:50%;background:var(--nota-baja);flex:none;transition:background .3s}
+.led.vivo{background:var(--p3);animation:respira 2.6s ease-in-out infinite}
+.led.mal{background:var(--p0)}
+@keyframes respira{0%,100%{box-shadow:0 0 0 0 rgba(53,199,127,.55)}60%{box-shadow:0 0 0 6px rgba(53,199,127,0)}}
+#estadoTxt{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--nota);
+  letter-spacing:.04em;white-space:nowrap}
+.ib{padding:7px;border-radius:var(--r);color:var(--nota);line-height:0;flex:none;transition:.15s}
+.ib:hover{color:var(--tiza);background:var(--chasis-alto)}
+.ib[aria-pressed="true"]{color:var(--p3)}
 
-  /* listas y secciones */
-  .titulo-sec{display:flex;align-items:baseline;gap:10px;padding:20px 14px 8px;max-width:1080px;margin:0 auto;flex-wrap:wrap}
-  .titulo-sec h2{font-weight:700;font-size:15px}
-  .titulo-sec span{font-size:11px;color:var(--nota);font-family:"IBM Plex Mono",monospace}
-  ul.eventos{list-style:none;max-width:1080px;margin:0 auto;padding:0 14px}
-  ul.eventos li{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--linea);cursor:pointer}
-  ul.eventos li:hover{background:var(--placa)}
-  ul.eventos li.nuevo{animation:entra 1s ease}
-  @keyframes entra{from{background:rgba(255,59,48,.18)}to{background:transparent}}
-  .pastilla{flex:none;width:50px;text-align:center;font-family:"Barlow Condensed",sans-serif;
-    font-weight:700;font-size:20px;line-height:1;padding:6px 0;border-radius:var(--radio);color:#08131c}
-  .txt{flex:1;min-width:0}
-  .txt p{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .txt small{font-size:11px;color:var(--nota);font-family:"IBM Plex Mono",monospace}
-  .dist{flex:none;text-align:right;font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--nota)}
-  .vacio{padding:26px 14px;color:var(--nota);font-size:14px;max-width:1080px;margin:0 auto}
+/* ═══════════════ selector de región ═══════════════ */
+.zona-sel{position:sticky;top:var(--cab);z-index:790;background:var(--chasis);
+  border-bottom:1px solid var(--filo);overflow-x:auto;scrollbar-width:none}
+.zona-sel::-webkit-scrollbar{display:none}
+.zona-fila{display:flex;gap:0;width:max-content;min-width:100%;max-width:1360px;margin:0 auto;padding:0 16px}
+.zona{position:relative;white-space:nowrap;padding:11px 14px 10px;font-family:"IBM Plex Mono",monospace;
+  font-size:11px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--nota-baja);transition:color .15s}
+.zona:hover{color:var(--nota)}
+.zona[aria-current="true"]{color:var(--tiza)}
+.zona[aria-current="true"]::after{content:"";position:absolute;left:14px;right:14px;bottom:0;
+  height:2px;background:var(--p0)}
+.zona b{font-weight:500;margin-left:6px;padding:1px 5px;border-radius:100px;
+  background:var(--filo);color:var(--nota);font-size:10px}
+.zona[aria-current="true"] b{background:var(--p0);color:var(--tinta)}
+.zona b:empty{display:none}
 
-  /* pronostico */
-  .aviso-fuerte{max-width:1080px;margin:16px auto 0;padding:12px 14px;border:1px solid var(--p1);
-    border-left-width:3px;border-radius:var(--radio);background:rgba(255,138,31,.07);
-    font-size:13px;line-height:1.5}
-  .aviso-fuerte b{color:var(--p1)}
-  .tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;
-    max-width:1080px;margin:0 auto;padding:14px}
-  .tarjeta{background:var(--placa);border:1px solid var(--linea);border-radius:var(--radio);padding:12px}
-  .tarjeta h3{font-size:10.5px;color:var(--nota);font-weight:600;margin-bottom:6px}
-  .tarjeta .val{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:32px;line-height:1}
-  .tarjeta .sub{font-size:11px;color:var(--nota);font-family:"IBM Plex Mono",monospace;margin-top:4px}
+/* ═══════════════ malla general ═══════════════ */
+.tablero{max-width:1360px;margin:0 auto;padding:0 16px}
+@media (min-width:1000px){
+  .tablero{display:grid;grid-template-columns:minmax(0,1fr) minmax(380px,440px);
+    gap:20px;align-items:start;padding:0 16px 30px}
+  .col-b{position:sticky;top:calc(var(--cab) + 40px)}
+}
 
-  table.prob{width:100%;border-collapse:collapse;font-family:"IBM Plex Mono",monospace;font-size:13px}
-  table.prob th{text-align:left;font-family:"Barlow Condensed",sans-serif;font-size:11px;
-    letter-spacing:.08em;text-transform:uppercase;color:var(--nota);font-weight:600;
-    padding:6px 8px;border-bottom:1px solid var(--linea)}
-  table.prob td{padding:9px 8px;border-bottom:1px solid var(--linea)}
-  table.prob td:first-child{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:17px}
-  .barra-p{height:5px;border-radius:3px;background:var(--linea);overflow:hidden;margin-top:4px}
-  .barra-p i{display:block;height:100%;background:var(--p1)}
-  .tabla-caja{max-width:1080px;margin:0 auto;padding:0 14px}
+/* ═══════════════ helicorder: la tira de papel ═══════════════ */
+.registro{margin:14px 0;border-radius:var(--r-g);overflow:hidden;box-shadow:var(--sombra);
+  border:1px solid var(--filo)}
+.registro-cab{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--chasis);
+  border-bottom:1px solid var(--filo)}
+.registro-cab .rotulo{color:var(--nota)}
+.registro-cab span:last-child{margin-left:auto;font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;color:var(--nota-baja)}
+.papel{background:var(--papel);position:relative}
+#helicorder{width:100%;height:152px;cursor:crosshair;touch-action:pan-y;display:block}
+.papel::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(90deg,rgba(0,0,0,.07),transparent 6%,transparent 94%,rgba(0,0,0,.07))}
 
-  #grafico,#gAnual{display:block;width:100%;height:210px;background:var(--placa);
-    border:1px solid var(--linea);border-radius:var(--radio)}
-  .pie-graf{font-size:11px;color:var(--nota);margin-top:7px;line-height:1.5}
+/* ═══════════════ lectura principal ═══════════════ */
+.lectura{display:flex;gap:18px;align-items:flex-start;padding:18px 0 20px;
+  border-bottom:1px solid var(--filo);flex-wrap:wrap}
+.aguja{flex:none;min-width:104px}
+.aguja .rotulo{margin-bottom:4px}
+.aguja .num{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:clamp(58px,15vw,84px);
+  font-variation-settings:"wdth" 80;line-height:.8;letter-spacing:-.03em;transition:color .4s}
+.aguja .tipo{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--nota-baja);margin-top:8px;letter-spacing:.1em}
+.ficha{flex:1 1 260px;min-width:220px}
+.ficha h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:19px;
+  font-variation-settings:"wdth" 92;line-height:1.25;margin-bottom:10px;text-wrap:balance}
+.pares{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px 16px}
+.par .rotulo{display:block;margin-bottom:2px}
+.par b{font-family:"IBM Plex Mono",monospace;font-size:13.5px;font-weight:500;color:var(--tiza)}
+.sentir{margin-top:14px;padding:9px 12px;background:var(--chasis);border-left:2px solid var(--filo-vivo);
+  border-radius:0 var(--r) var(--r) 0;font-size:12.5px;color:var(--nota);line-height:1.5}
 
-  .zona{display:flex;gap:11px;align-items:center;padding:11px 0;border-bottom:1px solid var(--linea);cursor:pointer}
-  .zona:hover{background:var(--placa)}
-  .zona .n{flex:none;width:26px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--nota)}
-  .zona .cuerpo{flex:1;min-width:0}
-  .zona .cuerpo p{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .zona .cuerpo small{font-size:11px;color:var(--nota);font-family:"IBM Plex Mono",monospace}
-  .tendencia{flex:none;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:12px;
-    letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:100px;border:1px solid}
-  .t-sube{color:var(--p0);border-color:var(--p0)}
-  .t-igual{color:var(--nota);border-color:var(--linea)}
-  .t-baja{color:var(--p3);border-color:var(--p3)}
+/* ═══════════════ corte sísmico ═══════════════ */
+.corte{margin:16px 0;border:1px solid var(--filo);border-radius:var(--r-g);
+  background:var(--chasis);overflow:hidden}
+.corte-cab{display:flex;align-items:baseline;gap:10px;padding:11px 14px 9px;flex-wrap:wrap}
+.corte-cab h2{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:13px;
+  letter-spacing:.02em;font-variation-settings:"wdth" 88}
+.corte-cab span{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--nota-baja);letter-spacing:.05em}
+#corteLienzo{width:100%;height:190px}
+.corte p{padding:10px 14px 13px;font-size:12px;color:var(--nota);line-height:1.55;border-top:1px solid var(--filo)}
 
-  .leyenda{display:flex;gap:11px;flex-wrap:wrap;font-size:10px;color:var(--nota);
-    font-family:"IBM Plex Mono",monospace;padding:14px;max-width:1080px;margin:0 auto}
-  .leyenda i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-  footer{border-top:1px solid var(--linea);padding:18px 14px 46px;max-width:1080px;margin:20px auto 0;
-    font-size:11.5px;color:var(--nota);line-height:1.65}
-  #flash{position:fixed;inset:0;pointer-events:none;z-index:1500;opacity:0;
-    box-shadow:inset 0 0 120px 20px var(--p0);transition:opacity .4s}
-  #flash.on{opacity:1}
-  .oculto{display:none!important}
-  .cargando{padding:26px 14px;color:var(--nota);font-size:13px;font-family:"IBM Plex Mono",monospace;
-    max-width:1080px;margin:0 auto}
+/* ═══════════════ mapa ═══════════════ */
+.caja-mapa{border:1px solid var(--filo);border-radius:var(--r-g);overflow:hidden;
+  margin:16px 0;box-shadow:var(--sombra)}
+#mapa{height:340px;background:#0A121B;z-index:1}
+@media (min-width:1000px){ #mapa{height:min(64vh,620px)} .caja-mapa{margin-top:14px} }
+.leaflet-container{background:#0A121B;font-family:inherit}
+.leaflet-control-attribution{background:rgba(7,12,18,.82)!important;color:var(--nota-baja)!important;font-size:9px!important}
+.leaflet-control-attribution a{color:var(--nota-baja)!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--chasis-alto);color:var(--tiza);
+  border-radius:var(--r);box-shadow:0 8px 30px rgba(0,0,0,.6)}
+.leaflet-popup-content{margin:11px 13px;font-size:13px;line-height:1.5}
+.leaflet-popup-content b{font-family:"Bricolage Grotesque",sans-serif;font-size:16px}
+.leaflet-control-zoom a{background:var(--chasis)!important;color:var(--nota)!important;
+  border-color:var(--filo)!important}
+.leaflet-control-zoom a:hover{background:var(--chasis-alto)!important;color:var(--tiza)!important}
+.onda{border-radius:50%;animation:expandir 2.4s ease-out forwards;pointer-events:none}
+@keyframes expandir{0%{transform:scale(.2);opacity:.9}100%{transform:scale(3.2);opacity:0}}
 
-  @media (max-width:560px){
-    .mag-grande{font-size:56px}
-    #mapa{height:260px}
-  }
-  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* ═══════════════ listas ═══════════════ */
+.rubro{display:flex;align-items:baseline;gap:10px;padding:24px 0 10px;flex-wrap:wrap}
+.rubro h2{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:14.5px;
+  font-variation-settings:"wdth" 88;letter-spacing:.01em}
+.rubro span{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--nota-baja);letter-spacing:.05em}
+.rubro .der{margin-left:auto}
+ul.pila{list-style:none}
+ul.pila li{display:flex;align-items:center;gap:12px;padding:11px 10px;margin:0 -10px;
+  border-bottom:1px solid var(--filo);cursor:pointer;border-radius:var(--r);transition:background .12s}
+ul.pila li:hover,ul.pila li:focus-visible{background:var(--chasis)}
+ul.pila li[aria-selected="true"]{background:var(--chasis-alto);box-shadow:inset 2px 0 0 var(--p0)}
+ul.pila li.fresco{animation:aterriza .9s cubic-bezier(.2,.8,.3,1)}
+@keyframes aterriza{0%{background:rgba(255,68,51,.22);transform:translateX(-4px)}100%{background:transparent;transform:none}}
+.chapa{flex:none;width:50px;text-align:center;font-family:"Bricolage Grotesque",sans-serif;
+  font-weight:800;font-size:19px;font-variation-settings:"wdth" 80;line-height:1;
+  padding:7px 0;border-radius:var(--r);color:#0A0D10}
+.cuerpo{flex:1;min-width:0}
+.cuerpo p{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px}
+.cuerpo small{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--nota-baja);letter-spacing:.03em}
+.margen{flex:none;text-align:right;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--nota-baja)}
+
+/* ═══════════════ tarjetas y tablas ═══════════════ */
+.fichas{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;margin:14px 0}
+.f{background:var(--chasis);border:1px solid var(--filo);border-radius:var(--r-g);padding:13px}
+.f .rotulo{display:block;margin-bottom:7px}
+.f .v{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:30px;
+  font-variation-settings:"wdth" 82;line-height:1}
+.f .s{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--nota-baja);
+  margin-top:6px;line-height:1.45}
+table.tab{width:100%;border-collapse:collapse;font-family:"IBM Plex Mono",monospace;font-size:12.5px}
+table.tab th{text-align:left;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--nota-baja);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--filo-vivo)}
+table.tab td{padding:11px 10px;border-bottom:1px solid var(--filo);vertical-align:top}
+table.tab td:first-child{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
+  font-size:16px;font-variation-settings:"wdth" 82}
+.medidor{height:4px;border-radius:3px;background:var(--filo);overflow:hidden;margin-top:5px}
+.medidor i{display:block;height:100%;background:var(--p1);border-radius:3px;
+  transition:width .6s cubic-bezier(.2,.8,.3,1)}
+.nota-pie{font-size:12px;color:var(--nota);line-height:1.6;margin-top:11px}
+.nota-pie b{color:var(--tiza);font-weight:600}
+#grafico,#gAnual{width:100%;height:210px;background:var(--chasis);
+  border:1px solid var(--filo);border-radius:var(--r-g)}
+
+/* filas de zona/celda */
+.franja{display:flex;gap:12px;align-items:center;padding:12px 10px;margin:0 -10px;
+  border-bottom:1px solid var(--filo);cursor:pointer;border-radius:var(--r)}
+.franja:hover{background:var(--chasis)}
+.franja .ord{flex:none;width:24px;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--nota-baja)}
+.franja .cuerpo p{font-size:13.5px}
+.pastilla{flex:none;font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:9.5px;
+  letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:100px;border:1px solid}
+.p-sube{color:var(--p0);border-color:rgba(255,68,51,.5);background:rgba(255,68,51,.08)}
+.p-igual{color:var(--nota-baja);border-color:var(--filo)}
+.p-baja{color:var(--p3);border-color:rgba(53,199,127,.4);background:rgba(53,199,127,.06)}
+
+/* ═══════════════ avisos y estados ═══════════════ */
+.cartel{margin:16px 0;padding:13px 15px;border:1px solid var(--filo-vivo);border-left:3px solid var(--p1);
+  border-radius:0 var(--r-g) var(--r-g) 0;background:linear-gradient(90deg,rgba(255,149,0,.06),transparent 70%);
+  font-size:13px;line-height:1.6}
+.cartel b{color:var(--p1);font-weight:600}
+.hueco{padding:34px 12px;text-align:center;color:var(--nota);font-size:13.5px;line-height:1.6}
+.hueco strong{display:block;color:var(--tiza);font-family:"Bricolage Grotesque",sans-serif;
+  font-weight:700;font-size:15px;margin-bottom:5px}
+.espectro{background:linear-gradient(90deg,var(--chasis) 25%,var(--chasis-alto) 37%,var(--chasis) 63%);
+  background-size:400% 100%;animation:brillo 1.5s ease infinite;border-radius:var(--r)}
+@keyframes brillo{0%{background-position:100% 0}100%{background-position:0 0}}
+.esq{height:14px;margin-bottom:9px}
+.esq.a{width:38%;height:26px} .esq.b{width:88%} .esq.c{width:64%}
+
+/* aviso emergente de evento nuevo */
+#alertaViva{position:fixed;left:12px;right:12px;top:calc(var(--cab) + 10px);z-index:1400;
+  max-width:520px;margin:0 auto;background:var(--chasis-alto);border:1px solid var(--p0);
+  border-radius:var(--r-g);box-shadow:0 14px 40px rgba(0,0,0,.65);padding:12px 14px;
+  display:flex;gap:12px;align-items:center;cursor:pointer;
+  transform:translateY(-140%);transition:transform .45s cubic-bezier(.2,.9,.3,1)}
+#alertaViva.entra{transform:none}
+#alertaViva .chapa{width:46px;font-size:18px}
+#alertaViva .cuerpo p{font-size:13.5px;font-weight:600}
+#alertaViva .cerrar{margin-left:auto;color:var(--nota-baja);padding:6px;line-height:0}
+#destello{position:fixed;inset:0;pointer-events:none;z-index:1300;opacity:0;
+  box-shadow:inset 0 0 140px 24px var(--p0);transition:opacity .45s}
+#destello.on{opacity:1}
+
+/* ═══════════════ formularios ═══════════════ */
+.grupo{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin:14px 0}
+.ctrl .rotulo{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;color:var(--nota)}
+.ctrl .rotulo b{font-weight:600;color:var(--tiza);letter-spacing:.02em;font-size:11.5px;text-transform:none}
+input[type=range]{width:100%;height:24px;accent-color:var(--p1);background:transparent}
+select{width:100%;background:var(--chasis);border:1px solid var(--filo-vivo);color:var(--tiza);
+  padding:9px 11px;border-radius:var(--r);font-size:14px;font-family:inherit}
+.acciones{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.bt{border:1px solid var(--filo-vivo);padding:9px 15px;border-radius:var(--r);
+  font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--nota);transition:.15s}
+.bt:hover{border-color:var(--nota);color:var(--tiza);background:var(--chasis)}
+.bt.primario{border-color:var(--p3);color:var(--p3)}
+.bt.primario:hover{background:rgba(53,199,127,.1);color:var(--p3)}
+.bloque{background:var(--chasis);border:1px solid var(--filo);border-radius:var(--r-g);padding:16px;margin:16px 0}
+
+/* ═══════════════ navegación inferior ═══════════════ */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:rgba(7,12,18,.94);
+  backdrop-filter:blur(16px);border-top:1px solid var(--filo);
+  padding-bottom:env(safe-area-inset-bottom)}
+.nav-int{display:flex;max-width:560px;margin:0 auto}
+.nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:9px 4px 8px;color:var(--nota-baja);transition:color .15s;position:relative}
+.nav button span{font-family:"IBM Plex Mono",monospace;font-size:9px;letter-spacing:.09em;text-transform:uppercase}
+.nav button[aria-current="true"]{color:var(--tiza)}
+.nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:26%;right:26%;
+  height:2px;background:var(--p0);border-radius:0 0 2px 2px}
+@media (min-width:1000px){
+  body{padding-bottom:0}
+  .nav{position:static;border-top:none;border-bottom:1px solid var(--filo);background:transparent;backdrop-filter:none}
+  .nav-int{max-width:1360px;margin:0 auto;padding:0 16px;justify-content:flex-start;gap:2px}
+  .nav button{flex:0 0 auto;flex-direction:row;gap:7px;padding:12px 16px}
+  .nav button span{font-size:10.5px}
+  .nav button[aria-current="true"]::before{top:auto;bottom:-1px;left:16px;right:16px;height:2px;border-radius:2px 2px 0 0}
+}
+
+/* ═══════════════ leyenda y pie ═══════════════ */
+.escala{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:16px 0 4px;
+  font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--nota-baja);letter-spacing:.04em}
+.escala i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.pie{border-top:1px solid var(--filo);margin-top:28px;padding:20px 0 34px;
+  font-size:11.5px;color:var(--nota-baja);line-height:1.7;max-width:1360px;margin-inline:auto}
+.pie b{color:var(--nota)}
+@media (min-width:1000px){ .pie{padding-inline:16px} }
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important}
+}
 </style>
 </head>
 <body>
 
-<div id="flash"></div>
+<div id="destello"></div>
 
-<header class="barra">
-  <div class="wrap">
-    <div class="marca">Tra<span>z</span>a</div>
-    <div class="estado">
-      <span class="punto" id="punto"></span>
-      <span id="estadoTxt" class="mono">conectando</span>
-      <button class="icono-btn" id="btnSonido" aria-label="Sonido de alerta">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+<div id="alertaViva" role="alert" aria-live="assertive">
+  <span class="chapa" id="avChapa">—</span>
+  <span class="cuerpo"><p id="avTitulo">—</p><small id="avSub">—</small></span>
+  <button class="cerrar" id="avCerrar" aria-label="Cerrar aviso">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 6-12 12M6 6l12 12"/></svg>
+  </button>
+</div>
+
+<header class="cab">
+  <div class="cab-int">
+    <div class="logo">Tra<em>z</em>a</div>
+    <div class="pulso">
+      <span class="led" id="led"></span>
+      <span id="estadoTxt">conectando</span>
+      <button class="ib" id="btSonido" aria-pressed="false" aria-label="Sonido de alerta">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
       </button>
-      <button class="icono-btn" id="btnNotif" aria-label="Notificaciones">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <button class="ib" id="btNotif" aria-pressed="false" aria-label="Notificaciones del sistema">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       </button>
     </div>
   </div>
 </header>
 
-<nav class="chips"><div class="chips-int" id="chips"></div></nav>
+<nav class="zona-sel" aria-label="Región"><div class="zona-fila" id="zonas"></div></nav>
 
-<div class="pestanas">
-  <button class="pestana activa" data-vista="vivo">En vivo</button>
-  <button class="pestana" data-vista="pronostico">Pronóstico</button>
-  <button class="pestana" data-vista="historial">Historial</button>
-  <button class="pestana" data-vista="ajustes">Alertas</button>
-</div>
+<nav class="nav" aria-label="Secciones">
+  <div class="nav-int">
+    <button data-v="vivo" aria-current="true">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 4 18 3-9h6"/></svg>
+      <span>En vivo</span>
+    </button>
+    <button data-v="pronostico">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+      <span>Pronóstico</span>
+    </button>
+    <button data-v="historial">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+      <span>Historial</span>
+    </button>
+    <button data-v="alertas">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+      <span>Alertas</span>
+    </button>
+  </div>
+</nav>
 
-<!-- ============ VISTA EN VIVO ============ -->
-<div id="v-vivo">
-  <section class="traza-caja">
-    <div class="wrap">
-      <canvas id="traza" aria-label="Sismos de las últimas 24 horas"></canvas>
-      <div class="traza-pie"><span>hace 24 h</span><span id="trazaCuenta">—</span><span>ahora</span></div>
-    </div>
-  </section>
+<!-- ══════════ EN VIVO ══════════ -->
+<main id="v-vivo">
+  <div class="tablero">
+    <div class="col-a">
 
-  <section class="destacado">
-    <div class="wrap">
-      <div class="mag-grande" id="magGrande"><small>magnitud</small>—</div>
-      <div class="detalle">
-        <h1 id="lugar">Cargando catálogo sísmico…</h1>
-        <div class="campos">
-          <span>hora <b id="cuando">—</b></span>
-          <span>profundidad <b id="prof">—</b></span>
-          <span>de vos <b id="dist">—</b></span>
-          <span>fuente <b id="fuente">—</b></span>
+      <section class="registro">
+        <div class="registro-cab">
+          <span class="rotulo">Registro · 24 h</span>
+          <span id="regCuenta">—</span>
         </div>
-        <p class="aviso-mmi" id="mmi"></p>
+        <div class="papel"><canvas id="helicorder" aria-label="Registro de las últimas 24 horas"></canvas></div>
+      </section>
+
+      <section class="lectura" id="lectura">
+        <div class="aguja">
+          <span class="rotulo">Magnitud</span>
+          <div class="num dis" id="agNum">—</div>
+          <div class="tipo" id="agTipo"></div>
+        </div>
+        <div class="ficha">
+          <h1 id="fLugar">Cargando catálogo…</h1>
+          <div class="pares">
+            <div class="par"><span class="rotulo">Ocurrió</span><b id="fCuando">—</b></div>
+            <div class="par"><span class="rotulo">Profundidad</span><b id="fProf">—</b></div>
+            <div class="par"><span class="rotulo">Distancia</span><b id="fDist">—</b></div>
+            <div class="par"><span class="rotulo">Fuente</span><b id="fFuente">—</b></div>
+          </div>
+          <p class="sentir" id="fSentir"></p>
+        </div>
+      </section>
+
+      <section class="corte">
+        <div class="corte-cab">
+          <h2>Corte en profundidad</h2>
+          <span id="corteEje">—</span>
+        </div>
+        <canvas id="corteLienzo" aria-label="Hipocentros vistos de perfil"></canvas>
+        <p id="corteNota">—</p>
+      </section>
+
+      <div class="rubro"><h2 id="tituloLista">Eventos</h2><span class="der" id="resumen">—</span></div>
+      <ul class="pila" id="lista"></ul>
+      <div class="hueco oculto" id="listaVacia">
+        <strong>Nada que mostrar con este filtro</strong>
+        Bajá la magnitud mínima de visualización en Alertas, o elegí una región más amplia.
+      </div>
+
+      <div class="escala">
+        <span>Profundidad</span>
+        <span><i style="background:var(--p0)"></i>0–30 km</span>
+        <span><i style="background:var(--p1)"></i>30–70</span>
+        <span><i style="background:var(--p2)"></i>70–150</span>
+        <span><i style="background:var(--p3)"></i>150–300</span>
+        <span><i style="background:var(--p4)"></i>300+</span>
+        <span>· el radio crece con la magnitud</span>
       </div>
     </div>
-  </section>
 
-  <div id="mapa"></div>
-
-  <div class="titulo-sec"><h2 id="tituloLista">Eventos</h2><span id="resumen">—</span></div>
-  <ul class="eventos" id="lista"></ul>
-  <div class="vacio" id="vacio" hidden>Sin eventos con este filtro. Bajá la magnitud mínima en la pestaña Alertas.</div>
-
-  <div class="leyenda">
-    <span>profundidad:</span>
-    <span><i style="background:var(--p0)"></i>0–30 km</span>
-    <span><i style="background:var(--p1)"></i>30–70</span>
-    <span><i style="background:var(--p2)"></i>70–150</span>
-    <span><i style="background:var(--p3)"></i>150–300</span>
-    <span><i style="background:var(--p4)"></i>300+</span>
-    <span>· el círculo crece con la magnitud</span>
-  </div>
-</div>
-
-<!-- ============ VISTA PRONÓSTICO ============ -->
-<div id="v-pronostico" class="oculto">
-  <div class="aviso-fuerte">
-    <b>Esto no es una predicción.</b> Nadie —ni el USGS ni ningún servicio del mundo— puede decir dónde,
-    cuándo y de qué tamaño será el próximo sismo. Lo que ves acá son <b>tasas estadísticas</b> calculadas
-    del catálogo de los últimos 30 días: con qué frecuencia históricamente ocurre cada magnitud en esta
-    zona, y qué probabilidad da ese ritmo para los próximos días. Un número alto significa "esta zona se
-    mueve seguido", no "va a temblar".
-  </div>
-
-  <div class="cargando" id="pronCargando">calculando…</div>
-
-  <div id="pronCuerpo" class="oculto">
-    <div class="tarjetas">
-      <div class="tarjeta"><h3>Valor b</h3><div class="val" id="kb">—</div><div class="sub" id="kbSub">—</div></div>
-      <div class="tarjeta"><h3>Ritmo actual</h3><div class="val" id="kRitmo">—</div><div class="sub" id="kRitmoSub">—</div></div>
-      <div class="tarjeta"><h3>Magnitud de referencia · 30 d</h3><div class="val" id="kMag">—</div><div class="sub" id="kMagSub">—</div></div>
-      <div class="tarjeta"><h3>Completitud del catálogo</h3><div class="val" id="kMc">—</div><div class="sub" id="kMcSub">—</div></div>
+    <div class="col-b">
+      <div class="caja-mapa"><div id="mapa"></div></div>
     </div>
+  </div>
+</main>
 
-    <div class="titulo-sec"><h2>Probabilidad por magnitud</h2><span id="probScope">—</span></div>
-    <div class="tabla-caja">
-      <table class="prob">
+<!-- ══════════ PRONÓSTICO ══════════ -->
+<main id="v-pronostico" class="oculto">
+  <div class="marco">
+    <div class="cartel">
+      <b>Esto no es una predicción.</b> Nadie puede decir dónde, cuándo y de qué tamaño será el próximo
+      sismo. Acá ves <b>tasas</b> sacadas del catálogo de 30 días: con qué frecuencia esta zona produce
+      cada magnitud, y qué probabilidad da ese ritmo para los próximos días. Un número alto significa
+      "esta zona se mueve seguido", no "va a temblar".
+    </div>
+    <div id="pronCargando">
+      <div class="espectro esq a"></div><div class="espectro esq b"></div><div class="espectro esq c"></div>
+    </div>
+    <div id="pronCuerpo" class="oculto">
+      <div class="fichas">
+        <div class="f"><span class="rotulo">Valor b</span><div class="v" id="kb">—</div><div class="s" id="kbSub">—</div></div>
+        <div class="f"><span class="rotulo">Ritmo actual</span><div class="v" id="kRitmo">—</div><div class="s" id="kRitmoSub">—</div></div>
+        <div class="f"><span class="rotulo">Magnitud de referencia</span><div class="v" id="kMag">—</div><div class="s" id="kMagSub">—</div></div>
+        <div class="f"><span class="rotulo">Completitud</span><div class="v" id="kMc">—</div><div class="s" id="kMcSub">—</div></div>
+      </div>
+
+      <div class="rubro"><h2>Probabilidad por magnitud</h2><span class="der" id="probScope">—</span></div>
+      <table class="tab">
         <thead><tr><th>Mag</th><th>Próximos 7 días</th><th>Próximos 30 días</th><th>Cada</th></tr></thead>
         <tbody id="tablaProb"></tbody>
       </table>
-    </div>
 
-    <div class="titulo-sec"><h2>Ley de Gutenberg-Richter</h2><span>ajuste al catálogo de 30 días</span></div>
-    <div class="tabla-caja">
+      <div class="rubro"><h2>Ley de Gutenberg-Richter</h2><span class="der">ajuste a 30 días</span></div>
       <canvas id="grafico" aria-label="Distribución frecuencia-magnitud"></canvas>
-      <p class="pie-graf" id="pieGraf"></p>
+      <p class="nota-pie" id="pieGraf"></p>
+
+      <div class="rubro"><h2>Secuencia de réplicas</h2><span class="der" id="repScope">—</span></div>
+      <div id="replicas"></div>
+
+      <div class="rubro"><h2>Zonas activas ahora</h2><span class="der">30 días · agrupadas a 120 km</span></div>
+      <div id="zonasAct"></div>
     </div>
-
-    <div class="titulo-sec"><h2>Secuencia de réplicas activa</h2><span id="repScope">—</span></div>
-    <div class="tabla-caja"><div id="replicas"></div></div>
-
-    <div class="titulo-sec"><h2>Zonas más activas ahora</h2><span>últimos 30 días · agrupadas a 120 km</span></div>
-    <div class="tabla-caja"><div id="zonas"></div></div>
   </div>
-</div>
+</main>
 
-
-<!-- ============ VISTA HISTORIAL ============ -->
-<div id="v-historial" class="oculto">
-  <div class="aviso-fuerte">
-    <b>Acá sí hay patrones.</b> Con décadas de catálogo se ven cosas reales: cada cuánto esta zona
-    produce un M6, dónde se concentran los epicentros, cómo se acumula y se libera la energía.
-    Pero ojo con la trampa clásica: que hayan pasado más años del promedio <b>no</b> significa
-    que "esté atrasado". Los sismos no llevan reloj — estadísticamente el intervalo medio no dice
-    nada sobre cuándo cae el próximo.
-  </div>
-
-  <section class="panel">
-    <div class="wrap">
-      <div class="rejilla">
-        <div class="campo">
-          <label for="desdeAnio">Periodo analizado</label>
+<!-- ══════════ HISTORIAL ══════════ -->
+<main id="v-historial" class="oculto">
+  <div class="marco">
+    <div class="cartel">
+      <b>Acá sí hay patrones.</b> Con décadas de catálogo se ve cada cuánto esta zona produce un M6,
+      dónde se concentran los epicentros y cómo se acumula la energía. Pero ojo con la trampa clásica:
+      que hayan pasado más años del promedio <b>no</b> significa que "esté atrasado".
+    </div>
+    <div class="bloque">
+      <div class="grupo">
+        <div class="ctrl">
+          <label class="rotulo" for="desdeAnio">Periodo <b id="desdeAnioVal">2000</b></label>
           <select id="desdeAnio">
             <option value="1970">Desde 1970</option>
             <option value="1990">Desde 1990</option>
@@ -319,1050 +466,103 @@
             <option value="2015">Desde 2015</option>
           </select>
         </div>
-        <div class="campo">
-          <label for="magHist">Magnitud mínima <b id="magHistVal">4.5</b></label>
+        <div class="ctrl">
+          <label class="rotulo" for="magHist">Magnitud mínima <b id="magHistVal">4.5</b></label>
           <input type="range" id="magHist" min="3" max="7" step="0.5" value="4.5">
         </div>
       </div>
-      <div class="fila-btn"><button class="btn" id="btnHist">Cargar historial</button></div>
-    </div>
-  </section>
-
-  <div class="cargando" id="histCargando">Elegí el periodo y tocá "Cargar historial".</div>
-
-  <div id="histCuerpo" class="oculto">
-    <div class="tarjetas">
-      <div class="tarjeta"><h3>Años de registro</h3><div class="val" id="hAnios">—</div><div class="sub" id="hAniosSub">—</div></div>
-      <div class="tarjeta"><h3>Mayor registrado</h3><div class="val" id="hMax">—</div><div class="sub" id="hMaxSub">—</div></div>
-      <div class="tarjeta"><h3>Ritmo medio</h3><div class="val" id="hRitmo">—</div><div class="sub">eventos por año</div></div>
-      <div class="tarjeta"><h3>Energía liberada</h3><div class="val" id="hEnergia">—</div><div class="sub" id="hEnergiaSub">—</div></div>
+      <div class="acciones"><button class="bt primario" id="btHist">Cargar historial</button></div>
     </div>
 
-    <div class="titulo-sec"><h2>Cada cuánto se repite</h2><span id="hScope">—</span></div>
-    <div class="tabla-caja">
-      <table class="prob">
+    <div class="hueco" id="histCargando">
+      <strong>Sin datos cargados todavía</strong>
+      Elegí el periodo y la magnitud mínima, después tocá "Cargar historial".
+    </div>
+
+    <div id="histCuerpo" class="oculto">
+      <div class="fichas">
+        <div class="f"><span class="rotulo">Años de registro</span><div class="v" id="hAnios">—</div><div class="s" id="hAniosSub">—</div></div>
+        <div class="f"><span class="rotulo">Mayor registrado</span><div class="v" id="hMax">—</div><div class="s" id="hMaxSub">—</div></div>
+        <div class="f"><span class="rotulo">Ritmo medio</span><div class="v" id="hRitmo">—</div><div class="s">eventos por año</div></div>
+        <div class="f"><span class="rotulo">Energía liberada</span><div class="v" id="hEnergia">—</div><div class="s" id="hEnergiaSub">—</div></div>
+      </div>
+
+      <div class="rubro"><h2>Cada cuánto se repite</h2><span class="der" id="hScope">—</span></div>
+      <table class="tab">
         <thead><tr><th>Mag</th><th>Ocurridos</th><th>Intervalo medio</th><th>Último hace</th></tr></thead>
         <tbody id="tablaRec"></tbody>
       </table>
-      <p class="pie-graf" id="pieRec"></p>
-    </div>
+      <p class="nota-pie" id="pieRec"></p>
 
-    <div class="titulo-sec"><h2>Actividad año por año</h2><span>barras: eventos · línea: energía acumulada</span></div>
-    <div class="tabla-caja">
+      <div class="rubro"><h2>Actividad año por año</h2><span class="der">barras: eventos · línea: energía acumulada</span></div>
       <canvas id="gAnual" aria-label="Eventos por año y energía acumulada"></canvas>
-      <p class="pie-graf" id="pieAnual"></p>
+      <p class="nota-pie" id="pieAnual"></p>
+
+      <div class="rubro"><h2>Dónde se concentran</h2><span class="der" id="hCeldaScope">—</span></div>
+      <div id="celdas"></div>
+
+      <div class="rubro"><h2>Los más grandes del periodo</h2></div>
+      <ul class="pila" id="listaGrandes"></ul>
     </div>
-
-    <div class="titulo-sec"><h2>Dónde se concentran</h2><span id="hCeldaScope">—</span></div>
-    <div class="tabla-caja"><div id="celdas"></div></div>
-
-    <div class="titulo-sec"><h2>Los más grandes del periodo</h2><span>—</span></div>
-    <ul class="eventos" id="listaGrandes"></ul>
   </div>
-</div>
+</main>
 
-<!-- ============ VISTA AJUSTES ============ -->
-<div id="v-ajustes" class="oculto">
-  <section class="panel">
-    <div class="wrap">
-      <div class="rejilla">
-        <div class="campo">
-          <label for="minMag">Avisar desde <b id="minMagVal">4.5</b></label>
+<!-- ══════════ ALERTAS ══════════ -->
+<main id="v-alertas" class="oculto">
+  <div class="marco">
+    <div class="bloque">
+      <div class="rubro" style="padding-top:0"><h2>Cuándo quiero que suene</h2></div>
+      <div class="grupo">
+        <div class="ctrl">
+          <label class="rotulo" for="minMag">Avisar desde <b id="minMagVal">M 4.5</b></label>
           <input type="range" id="minMag" min="1" max="8" step="0.1" value="4.5">
         </div>
-        <div class="campo">
-          <label for="radio">Radio de alerta <b id="radioVal">500 km</b></label>
+        <div class="ctrl">
+          <label class="rotulo" for="radio">Dentro de <b id="radioVal">500 km</b></label>
           <input type="range" id="radio" min="50" max="20000" step="50" value="500">
         </div>
-        <div class="campo">
-          <label for="centro">Mi punto de referencia</label>
+        <div class="ctrl">
+          <label class="rotulo" for="centro">Mi punto de referencia</label>
           <select id="centro"></select>
         </div>
-        <div class="campo">
-          <label for="minMagVista">Ver en el mapa desde <b id="minMagVistaVal">2.5</b></label>
+        <div class="ctrl">
+          <label class="rotulo" for="minMagVista">Ver en el mapa desde <b id="minMagVistaVal">M 2.5</b></label>
           <input type="range" id="minMagVista" min="1" max="7" step="0.1" value="2.5">
         </div>
       </div>
-      <div class="fila-btn">
-        <button class="btn" id="btnUbic">Usar mi ubicación</button>
-        <button class="btn" id="btnGlobal">Alertar de todo el mundo</button>
-        <button class="btn" id="btnProbar">Probar alerta</button>
-        <button class="btn" id="btnRefrescar">Actualizar ahora</button>
+      <div class="acciones">
+        <button class="bt" id="btUbic">Usar mi ubicación</button>
+        <button class="bt" id="btGlobal">Todo el mundo</button>
+        <button class="bt primario" id="btProbar">Probar alerta</button>
+        <button class="bt" id="btRefrescar">Actualizar ahora</button>
       </div>
     </div>
-  </section>
-  <div class="vacio">
-    Las alertas suenan solo mientras esta pestaña esté abierta. Para que avise con la app cerrada
-    hace falta un servidor que empuje notificaciones; en el móvil, agregá el sitio a la pantalla de inicio
-    y dejalo abierto en segundo plano.
-  </div>
-</div>
 
-<footer>
-  Datos: <a href="https://earthquake.usgs.gov/" target="_blank" rel="noopener">USGS</a> (catálogo global, feed actualizado cada minuto) ·
-  <a href="https://www.seismicportal.eu/" target="_blank" rel="noopener">EMSC/SeismicPortal</a> (aviso instantáneo por WebSocket).<br>
-  Modelos: Gutenberg-Richter con Mc por máxima curvatura y valor b por máxima verosimilitud (Aki 1965, error de Shi &amp; Bolt 1982);
-  réplicas con Reasenberg-Jones 1989 de parámetros genéricos y ley de Båth.<br>
-  No es alerta temprana: el aviso llega <b>después</b> del sismo, entre 2 y 15 minutos. Para Honduras la fuente oficial es COPECO/CENAOS y el procesamiento el IHCIT-UNAH.
+    <div class="bloque">
+      <div class="rubro" style="padding-top:0"><h2>Cómo llega el aviso</h2></div>
+      <p style="font-size:13.5px;color:var(--nota);line-height:1.65">
+        Suena mientras esta pestaña esté abierta. En el móvil, agregá el sitio a la pantalla de inicio
+        y dejalo en segundo plano. Para que avise con la app cerrada hace falta un servidor que empuje
+        notificaciones.
+      </p>
+      <p style="font-size:12px;color:var(--nota-baja);line-height:1.6;margin-top:10px">
+        Atajos de teclado: <b style="color:var(--nota)">1–4</b> cambian de sección ·
+        <b style="color:var(--nota)">R</b> actualiza · <b style="color:var(--nota)">S</b> silencia.
+      </p>
+    </div>
+  </div>
+</main>
+
+<footer class="pie marco">
+  Datos: <a href="https://earthquake.usgs.gov/" target="_blank" rel="noopener">USGS</a> ·
+  <a href="https://www.seismicportal.eu/" target="_blank" rel="noopener">EMSC/SeismicPortal</a>.
+  Modelos: Gutenberg-Richter con Mc por máxima curvatura y b por máxima verosimilitud (Aki 1965, error de Shi &amp; Bolt 1982);
+  réplicas con Reasenberg-Jones 1989 genérico y ley de Båth.<br>
+  <b>No es alerta temprana:</b> el aviso llega después del sismo, entre 2 y 15 minutos.
+  Para Honduras, la fuente oficial es COPECO/CENAOS y el procesamiento el IHCIT-UNAH.
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script>
-(function(){
-"use strict";
-
-/* =================== almacenamiento tolerante =================== */
-var mem={};
-var guardar={
-  get:function(k,d){try{var v=localStorage.getItem(k);return v===null?(k in mem?mem[k]:d):JSON.parse(v);}catch(e){return (k in mem)?mem[k]:d;}},
-  set:function(k,v){mem[k]=v;try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-};
-
-/* =================== regiones =================== */
-/* bbox = [latMin, latMax, lonMin, lonMax] */
-var REGIONES=[
-  {id:"mundo",  n:"Mundo",           bbox:null,                        centro:[10,-60],  zoom:2, minMag:4.0, minMagHist:6.0},
-  {id:"latam",  n:"Latinoamérica",   bbox:[-56, 33, -118, -34],        centro:[-10,-72], zoom:3, minMag:3.5, minMagHist:5.5},
-  {id:"mex",    n:"México",          bbox:[14, 33, -118, -86],         centro:[22,-102], zoom:5, minMag:2.5, minMagHist:4.5},
-  {id:"ca",     n:"Centroamérica",   bbox:[6, 19, -93, -76],           centro:[13,-85],  zoom:5, minMag:2.5, minMagHist:4.5},
-  {id:"caribe", n:"Caribe",          bbox:[9, 25, -87, -58],           centro:[17,-72],  zoom:5, minMag:2.5, minMagHist:4.5},
-  {id:"andesn", n:"Andes del norte", bbox:[-7, 13, -82, -60],          centro:[3,-73],   zoom:5, minMag:2.5, minMagHist:4.5},
-  {id:"peru",   n:"Perú y Bolivia",  bbox:[-23, -2, -83, -63],         centro:[-12,-74], zoom:5, minMag:3.0, minMagHist:4.5},
-  {id:"chile",  n:"Chile y Argentina",bbox:[-57, -17, -77, -60],       centro:[-35,-70], zoom:4, minMag:3.0, minMagHist:4.5},
-  {id:"brasil", n:"Brasil y Guayanas",bbox:[-34, 6, -74, -34],         centro:[-12,-52], zoom:4, minMag:2.5, minMagHist:4.0},
-  {id:"hn",     n:"Honduras",        bbox:[12.5, 17.5, -90.5, -82.5],  centro:[15,-86.5],zoom:7, minMag:2.0}
-];
-
-var cfg={
-  region:      guardar.get("region","ca"),
-  minMag:      guardar.get("minMag",4.5),
-  minMagVista: guardar.get("minMagVista",2.5),
-  radio:       guardar.get("radio",500),
-  lat:         guardar.get("lat",14.0723),
-  lon:         guardar.get("lon",-87.1921),
-  centro:      guardar.get("centro",0),
-  sonido:      guardar.get("sonido",false)
-};
-
-var CENTROS=[
-  {n:"Tegucigalpa",lat:14.0723,lon:-87.1921, minMagHist:4.0},{n:"San Pedro Sula",lat:15.5041,lon:-88.0250},
-  {n:"La Ceiba",lat:15.7597,lon:-86.7822},{n:"Roatán",lat:16.32,lon:-86.53},
-  {n:"Choluteca",lat:13.30,lon:-87.19},{n:"Comayagua",lat:14.45,lon:-87.64},
-  {n:"Ciudad de México",lat:19.43,lon:-99.13},{n:"Guatemala",lat:14.63,lon:-90.51},
-  {n:"San Salvador",lat:13.69,lon:-89.19},{n:"Managua",lat:12.11,lon:-86.24},
-  {n:"San José",lat:9.93,lon:-84.08},{n:"Panamá",lat:8.98,lon:-79.52},
-  {n:"Bogotá",lat:4.71,lon:-74.07},{n:"Quito",lat:-0.18,lon:-78.47},
-  {n:"Lima",lat:-12.05,lon:-77.04},{n:"Santiago",lat:-33.45,lon:-70.67}
-];
-
-/* =================== estado =================== */
-var catalogo={};     // clave -> evento (ámbito activo, 30 d)
-var vistos={};
-var arranque=true;
-var seleccion=null;
-var mapa,capaEv,marcaCentro,capaCaja;
-var vista="vivo";
-var cargandoCat=false;
-
-/* =================== utilidades =================== */
-function $(i){return document.getElementById(i);}
-function reg(){ for(var i=0;i<REGIONES.length;i++) if(REGIONES[i].id===cfg.region) return REGIONES[i]; return REGIONES[0]; }
-
-function distKm(a1,o1,a2,o2){
-  var R=6371,r=Math.PI/180,dA=(a2-a1)*r,dO=(o2-o1)*r;
-  var x=Math.sin(dA/2)*Math.sin(dA/2)+Math.cos(a1*r)*Math.cos(a2*r)*Math.sin(dO/2)*Math.sin(dO/2);
-  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-}
-function colorProf(k){ return k<30?"#FF3B30":k<70?"#FF8A1F":k<150?"#FFD60A":k<300?"#3DD68C":"#3B9EFF"; }
-function radioMarca(m){ return Math.max(3.5,Math.pow(Math.max(m,0),1.85)*0.8); }
-function haceCuanto(t){
-  var s=Math.max(0,(Date.now()-t)/1000);
-  return s<60?"hace "+Math.round(s)+" s":s<3600?"hace "+Math.round(s/60)+" min":
-         s<86400?"hace "+Math.round(s/3600)+" h":"hace "+Math.round(s/86400)+" d";
-}
-function horaLocal(t){ return new Date(t).toLocaleString("es-HN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}); }
-function enCaja(ev,b){ return !b || (ev.lat>=b[0]&&ev.lat<=b[1]&&ev.lon>=b[2]&&ev.lon<=b[3]); }
-
-function intensidadAprox(m,d,p){
-  var R=Math.sqrt(d*d+p*p);
-  return 1.7*m-3.4*Math.log(Math.max(R,5))/Math.LN10+1.5;
-}
-function txtIntensidad(I){
-  return I<2?"no perceptible a esa distancia":I<3?"apenas perceptible, sobre todo en pisos altos":
-         I<4?"perceptible dentro de edificios":I<5?"sacudida clara, objetos colgantes se mueven":
-         I<6?"sacudida fuerte, despierta a la gente":I<7?"sacudida muy fuerte, posible daño leve":
-         "sacudida severa, daño probable en construcción vulnerable";
-}
-
-/* =================== normalización =================== */
-function clave(la,lo,t){ return Math.round(t/120000)+"|"+la.toFixed(1)+"|"+lo.toFixed(1); }
-
-function agregar(ev){
-  if(ev.mag===null||ev.mag===undefined||isNaN(ev.mag)) return false;
-  var k=clave(ev.lat,ev.lon,ev.ts); ev.k=k;
-  ev.dist=distKm(cfg.lat,cfg.lon,ev.lat,ev.lon);
-  var pre=catalogo[k];
-  if(pre){ if(pre.fuente==="USGS"&&ev.fuente!=="USGS") return false; ev.reciente=pre.reciente; catalogo[k]=ev; return false; }
-  catalogo[k]=ev; return true;
-}
-
-function leerGeoJSON(j){
-  var nuevos=[];
-  (j.features||[]).forEach(function(f){
-    if(!f.geometry||!f.geometry.coordinates) return;
-    var c=f.geometry.coordinates,p=f.properties||{};
-    if(p.type&&p.type!=="earthquake") return;
-    var ev={lat:c[1],lon:c[0],prof:c[2]==null?10:c[2],mag:p.mag,
-            lugar:p.place||"Sin descripción",ts:p.time,url:p.url,fuente:"USGS"};
-    if(agregar(ev)) nuevos.push(catalogo[ev.k]);
-  });
-  return nuevos;
-}
-
-/* =================== datos =================== */
-function estado(t,ok){ $("estadoTxt").textContent=t; $("punto").className="punto"+(ok===true?" vivo":ok===false?" mal":""); }
-
-function urlFDSN(dias,minMag,bbox,limite){
-  var u="https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time"
-       +"&starttime="+new Date(Date.now()-dias*864e5).toISOString()
-       +"&minmagnitude="+minMag+"&limit="+(limite||2000);
-  if(bbox) u+="&minlatitude="+bbox[0]+"&maxlatitude="+bbox[1]+"&minlongitude="+bbox[2]+"&maxlongitude="+bbox[3];
-  return u;
-}
-
-function cargarCatalogo(){
-  var r=reg();
-  cargandoCat=true;
-  catalogo={};                        // el catálogo es por ámbito
-  $("pronCargando").classList.remove("oculto");
-  $("pronCuerpo").classList.add("oculto");
-  estado("cargando "+r.n.toLowerCase(),null);
-  return fetch(urlFDSN(30, r.minMag, r.bbox, 2000))
-    .then(function(x){ if(!x.ok) throw 0; return x.json(); })
-    .then(function(j){
-      leerGeoJSON(j);
-      cargandoCat=false;
-      estado("en vivo",true);
-      pintar(); calcularPronostico();
-    })
-    .catch(function(){ cargandoCat=false; estado("no se pudo cargar el catálogo",false); });
-}
-
-function sondear(){
-  return fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson",{cache:"no-store"})
-    .then(function(x){ if(!x.ok) throw 0; return x.json(); })
-    .then(function(j){
-      if(!cargandoCat) estado("en vivo",true);
-      manejarNuevos(leerGeoJSON(j));
-      pintar();
-    })
-    .catch(function(){ estado("sin conexión al feed",false); });
-}
-
-function abrirEMSC(){
-  var ws;
-  try{ ws=new WebSocket("wss://www.seismicportal.eu/standing_order/websocket"); }catch(e){ return; }
-  ws.onmessage=function(m){
-    try{
-      var d=JSON.parse(m.data),p=d.data&&d.data.properties; if(!p) return;
-      var ev={lat:p.lat,lon:p.lon,prof:p.depth,mag:p.mag,lugar:p.flynn_region||"Sin descripción",
-              ts:new Date(p.time).getTime(),
-              url:"https://www.emsc-csem.org/Earthquake/earthquake.php?id="+p.unid,fuente:"EMSC"};
-      if(agregar(ev)) manejarNuevos([catalogo[ev.k]]);
-      pintar();
-    }catch(e){}
-  };
-  ws.onclose=function(){ setTimeout(abrirEMSC,20000); };
-  ws.onerror=function(){ try{ws.close();}catch(e){} };
-}
-
-/* =================== alertas =================== */
-var ctxA=null;
-function pitar(){
-  if(!cfg.sonido) return;
-  try{
-    ctxA=ctxA||new (window.AudioContext||window.webkitAudioContext)();
-    if(ctxA.state==="suspended") ctxA.resume();
-    [0,.32,.64].forEach(function(o){
-      var os=ctxA.createOscillator(),g=ctxA.createGain();
-      os.type="square"; os.frequency.value=o===0?880:1170;
-      g.gain.setValueAtTime(.0001,ctxA.currentTime+o);
-      g.gain.exponentialRampToValueAtTime(.18,ctxA.currentTime+o+.02);
-      g.gain.exponentialRampToValueAtTime(.0001,ctxA.currentTime+o+.24);
-      os.connect(g); g.connect(ctxA.destination);
-      os.start(ctxA.currentTime+o); os.stop(ctxA.currentTime+o+.26);
-    });
-  }catch(e){}
-}
-function destellar(){ var f=$("flash"); f.classList.add("on"); setTimeout(function(){f.classList.remove("on");},900); }
-function avisar(ev){
-  destellar(); pitar();
-  if(navigator.vibrate) try{navigator.vibrate([200,90,200]);}catch(e){}
-  if(("Notification" in window)&&Notification.permission==="granted"){
-    try{ new Notification("Sismo M"+ev.mag.toFixed(1)+" · "+Math.round(ev.dist)+" km",{
-      body:ev.lugar+"\n"+Math.round(ev.prof)+" km de profundidad · "+horaLocal(ev.ts),
-      tag:ev.k, renotify:true }); }catch(e){}
-  }
-}
-function manejarNuevos(nuevos){
-  if(arranque){ nuevos.forEach(function(e){vistos[e.k]=1;}); return; }
-  nuevos.forEach(function(ev){
-    if(vistos[ev.k]) return; vistos[ev.k]=1;
-    if(ev.mag>=cfg.minMag && ev.dist<=cfg.radio){ ev.reciente=Date.now(); avisar(ev); }
-  });
-}
-
-/* =================== estadística sísmica =================== */
-
-/* Magnitud de completitud por máxima curvatura (+0.2, corrección estándar) */
-function magCompletitud(mags){
-  var h={},max=0,mc=0;
-  mags.forEach(function(m){ var b=Math.round(m*10)/10; h[b]=(h[b]||0)+1; });
-  for(var k in h){ if(h[k]>max){ max=h[k]; mc=parseFloat(k); } }
-  return Math.round((mc+0.2)*10)/10;
-}
-
-/* Valor b por máxima verosimilitud (Aki 1965) con error de Shi & Bolt (1982) */
-function valorB(mags,mc){
-  var sel=mags.filter(function(m){ return m>=mc-1e-9; });
-  var n=sel.length;
-  if(n<25) return null;
-  var media=sel.reduce(function(a,b){return a+b;},0)/n;
-  var den=media-(mc-0.05);
-  if(den<=0.05) return null;
-  var b=Math.log10(Math.E)/den;
-  var v=sel.reduce(function(a,m){return a+(m-media)*(m-media);},0)/(n*(n-1));
-  var sig=2.30*b*b*Math.sqrt(Math.max(v,0));
-  var a=Math.log10(n)+b*mc;      // a total del periodo
-  return {b:b,sig:sig,a:a,n:n,mc:mc,media:media};
-}
-
-/* Número esperado de eventos ≥ M en T días */
-function esperados(gr,dias,M,T){
-  var aDia=gr.a-Math.log10(dias);
-  return Math.pow(10,aDia-gr.b*M)*T;
-}
-function pPoisson(N){ return 1-Math.exp(-N); }
-
-/* Reasenberg & Jones (1989), parámetros genéricos */
-var RJ={a:-1.67,b:0.91,p:1.08,c:0.05};
-function replicasEsperadas(Mm,M,t1,t2){
-  var K=Math.pow(10,RJ.a+RJ.b*(Mm-M));
-  return K*(Math.pow(t2+RJ.c,1-RJ.p)-Math.pow(t1+RJ.c,1-RJ.p))/(1-RJ.p);
-}
-
-/* Agrupación espacial simple (enlace único a 120 km) */
-function agrupar(evs,radio){
-  // O(n^2): se acota a los 800 mas recientes para no trabar el movil
-  var fuente=evs.length>800 ? evs.slice().sort(function(a,b){return b.ts-a.ts;}).slice(0,800) : evs;
-  var libres=fuente.slice().sort(function(a,b){return b.mag-a.mag;});
-  var grupos=[],usado={};
-  libres.forEach(function(sem){
-    if(usado[sem.k]) return;
-    var g=[sem]; usado[sem.k]=1;
-    libres.forEach(function(e){
-      if(usado[e.k]) return;
-      if(distKm(sem.lat,sem.lon,e.lat,e.lon)<=radio){ usado[e.k]=1; g.push(e); }
-    });
-    if(g.length>=4) grupos.push(g);
-  });
-  return grupos.map(function(g){
-    var ahora=Date.now();
-    var u7=g.filter(function(e){return e.ts>ahora-7*864e5;}).length;
-    var p7=g.filter(function(e){return e.ts<=ahora-7*864e5&&e.ts>ahora-14*864e5;}).length;
-    var may=g.reduce(function(a,b){return b.mag>a.mag?b:a;});
-    var ult=g.reduce(function(a,b){return b.ts>a.ts?b:a;});
-    return {n:g.length,eventos:g,mayor:may,ultimo:ult,u7:u7,p7:p7,
-            tend: u7>p7*1.5&&u7>=3 ? "sube" : (u7<p7*0.6 ? "baja" : "igual")};
-  }).sort(function(a,b){ return b.u7-a.u7 || b.n-a.n; });
-}
-
-/* =================== pronóstico =================== */
-var grActual=null;
-
-function calcularPronostico(){
-  var evs=Object.keys(catalogo).map(function(k){return catalogo[k];})
-              .filter(function(e){ return enCaja(e,reg().bbox) && e.ts>Date.now()-30*864e5; });
-  if(evs.length<40){
-    $("pronCargando").textContent="El catálogo de esta zona tiene solo "+evs.length+
-      " eventos en 30 días. Hacen falta al menos 40 para que la estadística signifique algo. Probá una región más grande.";
-    $("pronCargando").classList.remove("oculto");
-    $("pronCuerpo").classList.add("oculto");
-    return;
-  }
-  var mags=evs.map(function(e){return e.mag;});
-  var mc=magCompletitud(mags);
-  var gr=valorB(mags,mc);
-  if(!gr){
-    $("pronCargando").textContent="No hay suficientes eventos por encima de la magnitud de completitud (M"+mc.toFixed(1)+") para ajustar el modelo.";
-    $("pronCargando").classList.remove("oculto"); $("pronCuerpo").classList.add("oculto");
-    return;
-  }
-  grActual={gr:gr,evs:evs,dias:30};
-  $("pronCargando").classList.add("oculto");
-  $("pronCuerpo").classList.remove("oculto");
-
-  var r=reg();
-  /* tarjetas */
-  $("kb").textContent=gr.b.toFixed(2);
-  $("kb").style.color = gr.b<0.8?"#FF8A1F":gr.b>1.2?"#3B9EFF":"#E8EDF2";
-  $("kbSub").textContent="± "+gr.sig.toFixed(2)+" · "+(gr.b<0.8?"pocos chicos por cada grande"
-      :gr.b>1.2?"muchos chicos por cada grande":"proporción típica");
-
-  var u7=evs.filter(function(e){return e.ts>Date.now()-7*864e5;}).length;
-  var p7=evs.filter(function(e){return e.ts<=Date.now()-7*864e5&&e.ts>Date.now()-14*864e5;}).length;
-  $("kRitmo").textContent=(evs.length/30).toFixed(1);
-  $("kRitmoSub").textContent="eventos/día · semana "+(p7?((u7/p7-1)*100).toFixed(0)+"%":"—")+" vs la anterior";
-
-  var M30=gr.a/gr.b;   // N(>=M)=1 en la ventana de 30 dias  =>  a - b*M = 0
-  $("kMag").textContent="M "+M30.toFixed(1);
-  $("kMagSub").textContent="magnitud que este ritmo produce ~1 vez cada 30 días";
-
-  $("kMc").textContent="M "+mc.toFixed(1);
-  $("kMcSub").textContent=gr.n+" eventos usados de "+evs.length;
-
-  $("probScope").textContent=r.n+" · a partir de M"+mc.toFixed(1);
-  $("repScope").textContent=r.n;
-
-  /* tabla de probabilidades */
-  var tb=$("tablaProb"); tb.innerHTML="";
-  var base=Math.max(Math.ceil(mc*2)/2, 3.5);
-  [base, base+1, base+1.5, base+2, base+2.5].forEach(function(M){
-    if(M>8.5) return;
-    var n7=esperados(gr,30,M,7), n30=esperados(gr,30,M,30);
-    var p7v=pPoisson(n7), p30=pPoisson(n30);
-    var porDia=esperados(gr,30,M,1);
-    var cada=porDia>0?1/porDia:Infinity;
-    var cadaTxt = !isFinite(cada) ? "—" : cada<1 ? (24*cada).toFixed(0)+" h" : cada<60 ? cada.toFixed(1)+" d"
-                 : cada<730 ? (cada/30.4).toFixed(1)+" meses"
-                 : cada<36500 ? (cada/365).toFixed(1)+" años" : "más de un siglo";
-    var tr=document.createElement("tr");
-    tr.innerHTML="<td>"+M.toFixed(1)+"</td>"+
-      "<td>"+(p7v*100).toFixed(p7v>0.1?0:1)+"%<div class='barra-p'><i style='width:"+(p7v*100).toFixed(1)+"%'></i></div></td>"+
-      "<td>"+(p30*100).toFixed(p30>0.1?0:1)+"%<div class='barra-p'><i style='width:"+(p30*100).toFixed(1)+"%'></i></div></td>"+
-      "<td style='color:var(--nota)'>"+cadaTxt+"</td>";
-    tb.appendChild(tr);
-  });
-
-  $("pieGraf").innerHTML="Cada punto es cuántos sismos hubo de esa magnitud o más en 30 días. "+
-    "La recta es el ajuste log N = "+gr.a.toFixed(2)+" − "+gr.b.toFixed(2)+"·M. "+
-    "Donde los puntos se despegan de la recta por abajo (a la izquierda), la red simplemente no detecta todo: "+
-    "por eso el cálculo arranca en M"+mc.toFixed(1)+".";
-
-  dibujarGR(gr,mags,mc);
-  pintarReplicas(evs);
-  pintarZonas(evs);
-}
-
-function etiquetaLog(e){
-  if(e===0) return "1";
-  if(e===1) return "10";
-  var sup="⁰¹²³⁴⁵⁶⁷⁸⁹".split(""), t="";
-  String(e).split("").forEach(function(d){ t+=sup[+d]||""; });
-  return "10"+t;
-}
-
-function dibujarGR(gr,mags,mc){
-  var c=$("grafico"),dpr=window.devicePixelRatio||1;
-  var w=c.clientWidth,h=210;
-  if(w<40) return;                       // el lienzo aun no tiene ancho (vista oculta)
-  c.width=w*dpr; c.height=h*dpr;
-  var g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
-
-  var mMin=Math.min.apply(null,mags), mMax=Math.max.apply(null,mags);
-  mMin=Math.floor(mMin*2)/2; mMax=Math.ceil(mMax*2)/2+0.2;
-  var pts=[];
-  for(var M=mMin;M<=mMax;M+=0.1){
-    var n=mags.filter(function(x){return x>=M-1e-9;}).length;
-    if(n>0) pts.push({m:M,y:Math.log10(n)});
-  }
-  if(!pts.length) return;
-  var yMax=Math.ceil(Math.max.apply(null,pts.map(function(p){return p.y;})))+0.2;
-  var L=38,R=10,T=12,B=26, pw=w-L-R, ph=h-T-B;
-  function X(m){ return L+pw*(m-mMin)/(mMax-mMin); }
-  function Y(y){ return T+ph*(1-y/yMax); }
-
-  g.strokeStyle="#24384C"; g.lineWidth=1; g.font='10px "IBM Plex Mono",monospace'; g.fillStyle="#7C93A8";
-  for(var yy=0;yy<=yMax;yy++){
-    var py=Math.round(Y(yy))+.5;
-    g.beginPath(); g.moveTo(L,py); g.lineTo(w-R,py); g.stroke();
-    g.fillText(etiquetaLog(yy), 6, py+3);
-  }
-  for(var mm=Math.ceil(mMin);mm<=mMax;mm++){
-    var px=Math.round(X(mm))+.5;
-    g.strokeStyle="#1B2C3E"; g.beginPath(); g.moveTo(px,T); g.lineTo(px,T+ph); g.stroke();
-    g.fillStyle="#7C93A8"; g.fillText("M"+mm, px-8, h-9);
-  }
-
-  /* recta ajustada */
-  g.strokeStyle="#FF8A1F"; g.lineWidth=1.6; g.setLineDash([5,4]);
-  g.beginPath();
-  var y1=gr.a-gr.b*mMin, y2=gr.a-gr.b*mMax;
-  g.moveTo(X(mMin),Y(Math.min(y1,yMax))); g.lineTo(X(mMax),Y(Math.max(y2,0)));
-  g.stroke(); g.setLineDash([]);
-
-  /* puntos */
-  pts.forEach(function(p){
-    var completo = p.m>=mc-1e-9;
-    g.fillStyle = completo?"#E8EDF2":"#4A6379";
-    g.beginPath(); g.arc(X(p.m),Y(p.y),completo?2.6:1.8,0,6.284); g.fill();
-  });
-
-  /* marca de Mc */
-  var xm=Math.round(X(mc))+.5;
-  g.strokeStyle="#3DD68C"; g.lineWidth=1; g.setLineDash([3,3]);
-  g.beginPath(); g.moveTo(xm,T); g.lineTo(xm,T+ph); g.stroke(); g.setLineDash([]);
-  g.fillStyle="#3DD68C"; g.font='600 10px "IBM Plex Mono",monospace';
-  g.fillText("Mc", xm+4, T+10);
-}
-
-function pintarReplicas(evs){
-  var cont=$("replicas");
-  var candidatos=evs.filter(function(e){ return e.mag>=5.0 && e.ts>Date.now()-30*864e5; })
-                    .sort(function(a,b){ return b.mag-a.mag; });
-  if(!candidatos.length){
-    cont.innerHTML="<p class='vacio' style='padding:16px 0'>No hay ningún sismo de M5.0 o más en los últimos 30 días en esta zona, así que no hay una secuencia de réplicas que modelar.</p>";
-    return;
-  }
-  var pri=candidatos[0];
-  var diasDesde=(Date.now()-pri.ts)/864e5;
-  var radioRup=Math.max(40,Math.pow(10,0.5*pri.mag-1.8)*2);
-  var rep=evs.filter(function(e){
-    return e.ts>pri.ts && distKm(pri.lat,pri.lon,e.lat,e.lon)<=radioRup;
-  });
-  var mayorRep=rep.length?rep.reduce(function(a,b){return b.mag>a.mag?b:a;}).mag:null;
-  var bath=pri.mag-1.2;
-
-  var filas="";
-  [Math.round((pri.mag-2)*10)/10, Math.round((pri.mag-1.5)*10)/10, Math.round((pri.mag-1)*10)/10].forEach(function(M){
-    if(M<3) return;
-    var n=replicasEsperadas(pri.mag,M,diasDesde,diasDesde+7);
-    filas+="<tr><td>"+M.toFixed(1)+"</td><td>"+(pPoisson(n)*100).toFixed(0)+"%"+
-      "<div class='barra-p'><i style='width:"+(pPoisson(n)*100).toFixed(0)+"%'></i></div></td>"+
-      "<td style='color:var(--nota)'>"+n.toFixed(2)+" esperadas</td></tr>";
-  });
-
-  cont.innerHTML=
-    "<div class='tarjeta' style='margin-bottom:14px'>"+
-      "<h3 style='font-family:\"Barlow Condensed\",sans-serif;letter-spacing:.1em;text-transform:uppercase'>Sismo principal</h3>"+
-      "<div class='val' style='color:"+colorProf(pri.prof)+"'>M "+pri.mag.toFixed(1)+"</div>"+
-      "<div class='sub' style='margin-top:6px'>"+pri.lugar+"</div>"+
-      "<div class='sub'>"+haceCuanto(pri.ts)+" · "+rep.length+" réplicas registradas en "+Math.round(radioRup)+" km"+
-      (mayorRep!==null?" · mayor M"+mayorRep.toFixed(1):"")+"</div>"+
-    "</div>"+
-    "<table class='prob'><thead><tr><th>Mag</th><th>Réplica en los próximos 7 días</th><th></th></tr></thead><tbody>"+filas+"</tbody></table>"+
-    "<p class='pie-graf'>Modelo de Reasenberg-Jones con parámetros genéricos: las réplicas decaen como 1/tiempo (ley de Omori), "+
-    "por eso la probabilidad baja sola con los días. Por la ley de Båth, la réplica más grande de una secuencia suele ser "+
-    "alrededor de <b>M"+bath.toFixed(1)+"</b> — un sismo principal de M"+pri.mag.toFixed(1)+" menos 1.2. "+
-    "Es un promedio de muchas secuencias, no una regla: hay casos donde la 'réplica' termina siendo más grande que el evento inicial.</p>";
-}
-
-function pintarZonas(evs){
-  var cont=$("zonas");
-  var grupos=agrupar(evs,120).slice(0,8);
-  if(!grupos.length){ cont.innerHTML="<p class='vacio' style='padding:16px 0'>No hay agrupaciones de al menos 4 eventos en esta zona.</p>"; return; }
-  cont.innerHTML="";
-  grupos.forEach(function(g,i){
-    var d=document.createElement("div"); d.className="zona";
-    var cls=g.tend==="sube"?"t-sube":g.tend==="baja"?"t-baja":"t-igual";
-    var txt=g.tend==="sube"?"acelerando":g.tend==="baja"?"decayendo":"estable";
-    d.innerHTML="<span class='n'>"+String(i+1).padStart(2,"0")+"</span>"+
-      "<span class='cuerpo'><p></p><small>"+g.n+" eventos · "+g.u7+" esta semana ("+g.p7+" la anterior) · mayor M"+
-      g.mayor.mag.toFixed(1)+" · último "+haceCuanto(g.ultimo.ts)+"</small></span>"+
-      "<span class='tendencia "+cls+"'>"+txt+"</span>";
-    d.querySelector("p").textContent=g.mayor.lugar;
-    d.onclick=function(){
-      cambiarVista("vivo"); seleccion=g.mayor.k; pintarDestacado(g.mayor);
-      if(mapa) mapa.setView([g.mayor.lat,g.mayor.lon],7);
-      window.scrollTo({top:0,behavior:"smooth"});
-    };
-    cont.appendChild(d);
-  });
-}
-
-
-/* =================== historial largo =================== */
-/* Catalogo de decadas via FDSN en CSV (mucho mas liviano que GeoJSON). */
-var historia=null, cargandoHist=false;
-
-function partirCSV(l){
-  var out=[],cur="",q=false;
-  for(var i=0;i<l.length;i++){
-    var ch=l.charAt(i);
-    if(q){ if(ch==='"'){ if(l.charAt(i+1)==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
-    else if(ch==='"') q=true;
-    else if(ch===','){ out.push(cur); cur=""; }
-    else cur+=ch;
-  }
-  out.push(cur); return out;
-}
-
-function leerCSV(txt){
-  var lin=txt.split("\n");
-  if(lin.length<2) return [];
-  var cab=partirCSV(lin[0]);
-  var iT=cab.indexOf("time"), iLa=cab.indexOf("latitude"), iLo=cab.indexOf("longitude"),
-      iP=cab.indexOf("depth"), iM=cab.indexOf("mag"), iL=cab.indexOf("place");
-  var out=[];
-  for(var i=1;i<lin.length;i++){
-    if(lin[i].length<20) continue;
-    var c=partirCSV(lin[i]);
-    var m=parseFloat(c[iM]), t=Date.parse(c[iT]);
-    if(isNaN(m)||isNaN(t)) continue;
-    out.push({ts:t, lat:parseFloat(c[iLa]), lon:parseFloat(c[iLo]),
-              prof:parseFloat(c[iP])||0, mag:m, lugar:(iL>=0?c[iL]:"")||"Sin descripción", fuente:"USGS"});
-  }
-  return out;
-}
-
-/* Energia sismica en joules y deformacion de Benioff */
-function energiaJ(m){ return Math.pow(10, 1.5*m + 4.8); }
-function fmtEnergia(J){
-  var tnt=J/4.184e9;                                   // toneladas de TNT
-  if(tnt<1e3) return tnt.toFixed(0)+" t";
-  if(tnt<1e6) return (tnt/1e3).toFixed(1)+" kt";
-  return (tnt/1e6).toFixed(1)+" Mt";
-}
-
-function cargarHistoria(){
-  if(cargandoHist) return;
-  var r=reg();
-  var anio=parseInt($("desdeAnio").value,10);
-  var mm=parseFloat($("magHist").value);
-  cargandoHist=true;
-  $("histCargando").textContent="Descargando catálogo de "+r.n+" desde "+anio+" (M"+mm.toFixed(1)+"+)…";
-  $("histCargando").classList.remove("oculto");
-  $("histCuerpo").classList.add("oculto");
-
-  var u="https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&orderby=time-asc"
-      + "&starttime="+anio+"-01-01&minmagnitude="+mm+"&limit=20000";
-  var b=r.bbox;
-  if(b) u+="&minlatitude="+b[0]+"&maxlatitude="+b[1]+"&minlongitude="+b[2]+"&maxlongitude="+b[3];
-
-  fetch(u).then(function(x){
-      if(x.status===400) throw new Error("demasiados eventos para una sola consulta");
-      if(!x.ok) throw new Error("el servicio no respondió");
-      return x.text();
-    })
-    .then(function(t){
-      var evs=leerCSV(t);
-      cargandoHist=false;
-      if(evs.length<30){
-        $("histCargando").textContent="Solo "+evs.length+" eventos en ese periodo con M"+mm.toFixed(1)+
-          "+. Bajá la magnitud mínima o ampliá el periodo.";
-        return;
-      }
-      historia={evs:evs, anio:anio, minMag:mm, region:r.id};
-      calcularHistoria();
-    })
-    .catch(function(e){
-      cargandoHist=false;
-      $("histCargando").textContent="No se pudo cargar: "+e.message+
-        ". Si son demasiados eventos, subí la magnitud mínima o acortá el periodo.";
-    });
-}
-
-function calcularHistoria(){
-  if(!historia) return;
-  var evs=historia.evs, r=reg();
-  var t0=evs[0].ts, t1=Date.now();
-  var anios=(t1-t0)/(365.25*864e5);
-  $("histCargando").classList.add("oculto");
-  $("histCuerpo").classList.remove("oculto");
-
-  var mayor=evs.reduce(function(a,b){return b.mag>a.mag?b:a;});
-  var Etot=evs.reduce(function(a,e){return a+energiaJ(e.mag);},0);
-
-  $("hAnios").textContent=anios.toFixed(1);
-  $("hAniosSub").textContent=evs.length+" eventos M"+historia.minMag.toFixed(1)+"+ desde "+historia.anio;
-  $("hMax").textContent="M "+mayor.mag.toFixed(1);
-  $("hMaxSub").textContent=new Date(mayor.ts).getFullYear()+" · "+mayor.lugar;
-  $("hRitmo").textContent=(evs.length/anios).toFixed(1);
-  $("hEnergia").textContent=fmtEnergia(Etot);
-  $("hEnergiaSub").textContent="equivalente en TNT · el mayor aportó "+
-    (energiaJ(mayor.mag)/Etot*100).toFixed(0)+"% del total";
-  $("hScope").textContent=r.n+" · "+historia.anio+"–"+new Date().getFullYear();
-
-  /* ---- tabla de recurrencia ---- */
-  var tb=$("tablaRec"); tb.innerHTML="";
-  var umbrales=[];
-  for(var M=historia.minMag; M<=8.5; M+=0.5) umbrales.push(Math.round(M*10)/10);
-  umbrales.forEach(function(M){
-    var sel=evs.filter(function(e){return e.mag>=M-1e-9;});
-    if(!sel.length) return;
-    var interv=anios/sel.length;
-    var ult=sel[sel.length-1];
-    var desde=(t1-ult.ts)/(365.25*864e5);
-    var razon=desde/interv;
-    var iTxt = interv<1/12 ? (interv*365).toFixed(0)+" días"
-             : interv<1 ? (interv*12).toFixed(1)+" meses" : interv.toFixed(1)+" años";
-    var dTxt = desde<1/12 ? (desde*365).toFixed(0)+" días"
-             : desde<1 ? (desde*12).toFixed(1)+" meses" : desde.toFixed(1)+" años";
-    var col = razon>2 ? "var(--p1)" : "var(--nota)";
-    var tr=document.createElement("tr");
-    tr.innerHTML="<td>"+M.toFixed(1)+"</td><td>"+sel.length+"</td><td>"+iTxt+
-      "</td><td style='color:"+col+"'>"+dTxt+" <span style='opacity:.6'>("+razon.toFixed(1)+"×)</span></td>";
-    tb.appendChild(tr);
-  });
-  $("pieRec").innerHTML="La última columna compara el tiempo transcurrido contra el intervalo medio. "+
-    "Un 3.0× llama la atención, pero <b>no es una cuenta regresiva</b>: en un proceso de Poisson la probabilidad "+
-    "del próximo evento es la misma haya pasado un mes o una década. Los intervalos medios además esconden "+
-    "muchísima dispersión — la misma falla puede repetir en 5 años o en 200.";
-
-  dibujarAnual(evs);
-
-  /* ---- celdas mas activas ---- */
-  var paso = (r.id==="mundo"||r.id==="latam") ? 2 : 0.5;
-  var rej={};
-  evs.forEach(function(e){
-    var k=Math.floor(e.lat/paso)+"_"+Math.floor(e.lon/paso);
-    if(!rej[k]) rej[k]={n:0,max:null,lat:0,lon:0,E:0};
-    var c=rej[k]; c.n++; c.E+=energiaJ(e.mag);
-    c.lat+=e.lat; c.lon+=e.lon;
-    if(!c.max||e.mag>c.max.mag) c.max=e;
-  });
-  var celdas=Object.keys(rej).map(function(k){
-    var c=rej[k]; c.lat/=c.n; c.lon/=c.n; return c;
-  }).sort(function(a,b){return b.n-a.n;}).slice(0,8);
-
-  $("hCeldaScope").textContent="celdas de "+paso+"° · "+Object.keys(rej).length+" ocupadas";
-  var cont=$("celdas"); cont.innerHTML="";
-  var maxN=celdas[0].n;
-  celdas.forEach(function(c,i){
-    var d=document.createElement("div"); d.className="zona";
-    d.innerHTML="<span class='n'>"+String(i+1).padStart(2,"0")+"</span>"+
-      "<span class='cuerpo'><p></p><small>"+c.n+" eventos ("+(c.n/evs.length*100).toFixed(0)+
-      "% del total) · mayor M"+c.max.mag.toFixed(1)+" en "+new Date(c.max.ts).getFullYear()+
-      " · "+fmtEnergia(c.E)+"</small>"+
-      "<div class='barra-p' style='margin-top:5px'><i style='width:"+(c.n/maxN*100).toFixed(0)+"%'></i></div></span>";
-    d.querySelector("p").textContent=c.max.lugar;
-    d.onclick=function(){
-      if(mapa){ cambiarVista("vivo"); mapa.setView([c.lat,c.lon],paso>1?5:7);
-        window.scrollTo({top:0,behavior:"smooth"}); }
-    };
-    cont.appendChild(d);
-  });
-
-  /* ---- los mas grandes ---- */
-  var ul=$("listaGrandes"); ul.innerHTML="";
-  evs.slice().sort(function(a,b){return b.mag-a.mag;}).slice(0,10).forEach(function(ev){
-    var li=document.createElement("li");
-    li.innerHTML="<span class='pastilla' style='background:"+colorProf(ev.prof)+"'>"+ev.mag.toFixed(1)+"</span>"+
-      "<span class='txt'><p></p><small>"+new Date(ev.ts).toLocaleDateString("es-HN",{year:"numeric",month:"short",day:"2-digit"})+
-      " · "+Math.round(ev.prof)+" km prof · "+fmtEnergia(energiaJ(ev.mag))+"</small></span>"+
-      "<span class='dist'>"+Math.round(distKm(cfg.lat,cfg.lon,ev.lat,ev.lon))+" km</span>";
-    li.querySelector("p").textContent=ev.lugar;
-    li.onclick=function(){ if(mapa){ cambiarVista("vivo"); mapa.setView([ev.lat,ev.lon],6);
-      window.scrollTo({top:0,behavior:"smooth"}); } };
-    ul.appendChild(li);
-  });
-}
-
-function dibujarAnual(evs){
-  var c=$("gAnual"),dpr=window.devicePixelRatio||1,w=c.clientWidth,h=210;
-  if(w<40) return;
-  c.width=w*dpr; c.height=h*dpr;
-  var g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
-
-  var a0=new Date(evs[0].ts).getFullYear(), a1=new Date().getFullYear(), a;
-  var porAnio={}, benioffAnio={};
-  for(a=a0;a<=a1;a++){ porAnio[a]=0; benioffAnio[a]=0; }
-  evs.forEach(function(e){
-    var y=new Date(e.ts).getFullYear();
-    if(porAnio[y]===undefined) return;
-    porAnio[y]++; benioffAnio[y]+=Math.sqrt(energiaJ(e.mag));
-  });
-  var acum={}, E=0;
-  for(a=a0;a<=a1;a++){ E+=benioffAnio[a]; acum[a]=E; }
-
-  var anios=[]; for(a=a0;a<=a1;a++) anios.push(a);
-  var maxN=Math.max.apply(null,anios.map(function(y){return porAnio[y];}))||1;
-  var maxE=acum[a1]||1;
-  var L=34,R=8,T=10,B=24, pw=w-L-R, ph=h-T-B;
-  var bw=Math.max(1,pw/anios.length-1.5);
-
-  g.font='10px "IBM Plex Mono",monospace';
-  [0,.5,1].forEach(function(f){
-    var py=Math.round(T+ph*(1-f))+.5;
-    g.strokeStyle="#24384C"; g.beginPath(); g.moveTo(L,py); g.lineTo(w-R,py); g.stroke();
-    g.fillStyle="#7C93A8"; g.fillText(String(Math.round(maxN*f)),4,py+3);
-  });
-
-  anios.forEach(function(y,i){
-    var x=L+pw*i/anios.length, alt=ph*porAnio[y]/maxN;
-    g.fillStyle="#37506A"; g.fillRect(x,T+ph-alt,bw,alt);
-  });
-
-  g.strokeStyle="#FF8A1F"; g.lineWidth=1.8; g.beginPath();
-  anios.forEach(function(y,i){
-    var x=L+pw*(i+0.5)/anios.length, py=T+ph*(1-acum[y]/maxE);
-    if(i) g.lineTo(x,py); else g.moveTo(x,py);
-  });
-  g.stroke();
-
-  g.fillStyle="#7C93A8";
-  g.fillText(String(a0),L,h-8);
-  g.fillText(String(a1),w-R-26,h-8);
-
-  var pico=anios.reduce(function(x,y){return porAnio[y]>porAnio[x]?y:x;},a0);
-  $("pieAnual").innerHTML="El año más activo fue <b>"+pico+"</b> con "+porAnio[pico]+" eventos. "+
-    "La línea naranja es la deformación acumulada de Benioff (raíz de la energía): los tramos planos son "+
-    "periodos tranquilos y los escalones verticales son los sismos grandes. Cuidado al leer los picos: "+
-    "parte del aumento con los años es <b>más sismómetros</b>, no más sismos.";
-}
-
-/* =================== mapa =================== */
-function iniciarMapa(){
-  if(typeof L==="undefined"){          // la libreria del mapa no cargo: seguimos sin mapa
-    var cont=$("mapa");
-    cont.style.height="auto";
-    cont.style.padding="18px 14px";
-    cont.innerHTML="<p style='color:#7C93A8;font-size:13px;max-width:1080px;margin:0 auto'>"+
-      "El mapa no cargó porque este visor bloquea la librería externa. Todo lo demás "+
-      "—traza, lista, pronóstico e historial— funciona igual. En tu propio hosting sí carga.</p>";
-    return;
-  }
-  var r=reg();
-  mapa=L.map("mapa",{zoomControl:false,worldCopyJump:true}).setView(r.centro,r.zoom);
-  L.control.zoom({position:"bottomright"}).addTo(mapa);
-  var teselas=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    {attribution:"&copy; OpenStreetMap &copy; CARTO",maxZoom:18}).addTo(mapa);
-  var fallos=0;
-  teselas.on("tileerror",function(){          // si CARTO no responde, pasamos a OSM
-    if(++fallos===6){ mapa.removeLayer(teselas);
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-        {attribution:"&copy; OpenStreetMap",maxZoom:18}).addTo(mapa); }
-  });
-  capaEv=L.layerGroup().addTo(mapa);
-  capaCaja=L.layerGroup().addTo(mapa);
-  marcaCentro=L.circleMarker([cfg.lat,cfg.lon],{radius:5,color:"#E8EDF2",weight:2,fillOpacity:0})
-    .addTo(mapa).bindPopup("Mi punto de referencia");
-}
-
-function pintarMapa(lista){
-  if(!mapa) return;
-  capaEv.clearLayers(); capaCaja.clearLayers();
-  marcaCentro.setLatLng([cfg.lat,cfg.lon]);
-  var b=reg().bbox;
-  if(b) L.rectangle([[b[0],b[2]],[b[1],b[3]]],{color:"#3B9EFF",weight:1,fill:false,dashArray:"4 5",opacity:.4}).addTo(capaCaja);
-  lista.forEach(function(ev){
-    var m=L.circleMarker([ev.lat,ev.lon],{radius:radioMarca(ev.mag),color:colorProf(ev.prof),
-      fillColor:colorProf(ev.prof),fillOpacity:.25,weight:1.3}).addTo(capaEv);
-    m.bindPopup("<b>M "+ev.mag.toFixed(1)+"</b><br>"+ev.lugar+"<br><span style='color:#7C93A8'>"+
-      Math.round(ev.prof)+" km prof · "+horaLocal(ev.ts)+"</span>");
-    m.on("click",function(){ seleccion=ev.k; pintarDestacado(ev); });
-  });
-}
-
-/* =================== traza =================== */
-function pintarTraza(lista){
-  var c=$("traza"),dpr=window.devicePixelRatio||1,w=c.clientWidth,h=88;
-  c.width=w*dpr; c.height=h*dpr;
-  var g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
-  var ahora=Date.now(),ini=ahora-864e5,base=h-14;
-  g.strokeStyle="#24384C";
-  for(var t=6;t<=24;t+=6){ var x=Math.round(w*(1-t/24))+.5; g.beginPath(); g.moveTo(x,6); g.lineTo(x,base); g.stroke(); }
-  g.beginPath(); g.moveTo(0,base+.5); g.lineTo(w,base+.5); g.strokeStyle="#37506A"; g.stroke();
-  var vent=lista.filter(function(e){return e.ts>=ini;});
-  vent.forEach(function(ev){
-    var x=w*((ev.ts-ini)/864e5), alto=Math.min(base-5,Math.pow(Math.max(ev.mag,0),1.7)*3.2);
-    g.strokeStyle=colorProf(ev.prof); g.lineWidth=ev.k===seleccion?3:1.5;
-    g.globalAlpha=ev.k===seleccion?1:.85;
-    g.beginPath(); g.moveTo(x,base); g.lineTo(x,base-alto); g.stroke();
-    if(ev.mag>=5){ g.globalAlpha=1; g.fillStyle=colorProf(ev.prof);
-      g.beginPath(); g.arc(x,base-alto-3,2.2,0,6.284); g.fill(); }
-  });
-  g.globalAlpha=1;
-  $("trazaCuenta").textContent=vent.length+" en 24 h";
-  c.onclick=function(e){
-    var r=c.getBoundingClientRect(),px=e.clientX-r.left,mej=null,dm=1e9;
-    vent.forEach(function(ev){ var x=w*((ev.ts-ini)/864e5),d=Math.abs(x-px); if(d<dm){dm=d;mej=ev;} });
-    if(mej&&dm<14){ seleccion=mej.k; pintarDestacado(mej); pintar();
-      if(mapa) mapa.setView([mej.lat,mej.lon],Math.max(mapa.getZoom(),6)); }
-  };
-}
-
-/* =================== render principal =================== */
-function pintarDestacado(ev){
-  if(!ev) return;
-  $("magGrande").innerHTML="<small>magnitud</small>"+ev.mag.toFixed(1);
-  $("magGrande").style.color=colorProf(ev.prof);
-  $("lugar").textContent=ev.lugar;
-  $("cuando").textContent=haceCuanto(ev.ts)+" · "+horaLocal(ev.ts);
-  $("prof").textContent=Math.round(ev.prof)+" km";
-  $("dist").textContent=Math.round(distKm(cfg.lat,cfg.lon,ev.lat,ev.lon))+" km";
-  $("fuente").textContent=ev.fuente;
-  $("mmi").textContent="En tu punto de referencia: "+txtIntensidad(intensidadAprox(ev.mag,ev.dist,ev.prof))+" (estimación aproximada, no oficial).";
-}
-
-function pintar(){
-  var r=reg();
-  var lista=Object.keys(catalogo).map(function(k){return catalogo[k];})
-    .filter(function(e){ return enCaja(e,r.bbox) && e.mag>=cfg.minMagVista; })
-    .sort(function(a,b){ return b.ts-a.ts; });
-
-  if(!seleccion||!catalogo[seleccion]||!enCaja(catalogo[seleccion],r.bbox))
-    seleccion=lista.length?lista[0].k:null;
-  if(seleccion) pintarDestacado(catalogo[seleccion]);
-
-  var ul=$("lista"); ul.innerHTML="";
-  lista.slice(0,80).forEach(function(ev){
-    var li=document.createElement("li");
-    if(ev.reciente&&Date.now()-ev.reciente<60000) li.className="nuevo";
-    li.innerHTML="<span class='pastilla' style='background:"+colorProf(ev.prof)+"'>"+ev.mag.toFixed(1)+"</span>"+
-      "<span class='txt'><p></p><small>"+haceCuanto(ev.ts)+" · "+Math.round(ev.prof)+" km prof · "+ev.fuente+"</small></span>"+
-      "<span class='dist'>"+Math.round(distKm(cfg.lat,cfg.lon,ev.lat,ev.lon))+" km</span>";
-    li.querySelector("p").textContent=ev.lugar;
-    li.onclick=function(){ seleccion=ev.k; pintarDestacado(ev); pintarTraza(lista);
-      if(mapa) mapa.setView([ev.lat,ev.lon],Math.max(mapa.getZoom(),6)); };
-    ul.appendChild(li);
-  });
-
-  $("vacio").hidden=lista.length>0;
-  $("tituloLista").textContent=r.n;
-  $("resumen").textContent=lista.length?lista.length+" eventos en 30 días · M"+cfg.minMagVista.toFixed(1)+"+":"sin resultados";
-  pintarMapa(lista.slice(0,300));
-  pintarTraza(lista);
-  actualizarChips();
-}
-
-function actualizarChips(){
-  var todos=Object.keys(catalogo).map(function(k){return catalogo[k];});
-  document.querySelectorAll(".chip").forEach(function(ch){
-    var id=ch.dataset.id, rr=null;
-    for(var i=0;i<REGIONES.length;i++) if(REGIONES[i].id===id) rr=REGIONES[i];
-    ch.classList.toggle("activo",id===cfg.region);
-    if(id===cfg.region){
-      var n=todos.filter(function(e){return enCaja(e,rr.bbox)&&e.ts>Date.now()-864e5;}).length;
-      ch.querySelector("b").textContent=n;
-    } else ch.querySelector("b").textContent="";
-  });
-}
-
-/* =================== interfaz =================== */
-function cambiarVista(v){
-  vista=v;
-  ["vivo","pronostico","historial","ajustes"].forEach(function(x){ $("v-"+x).classList.toggle("oculto",x!==v); });
-  document.querySelectorAll(".pestana").forEach(function(p){ p.classList.toggle("activa",p.dataset.vista===v); });
-  if(v==="vivo"&&mapa) setTimeout(function(){ mapa.invalidateSize(); pintar(); },50);
-  if(v==="pronostico") calcularPronostico();
-  if(v==="historial"&&historia&&historia.region===cfg.region) calcularHistoria();
-}
-
-function construirChips(){
-  var c=$("chips");
-  REGIONES.forEach(function(r){
-    var b=document.createElement("button");
-    b.className="chip"; b.dataset.id=r.id;
-    b.innerHTML=r.n+"<b></b>";
-    b.onclick=function(){
-      if(cfg.region===r.id) return;
-      cfg.region=r.id; guardar.set("region",r.id);
-      seleccion=null; historia=null;
-      $("magHist").value=r.minMagHist; $("magHistVal").textContent="M "+r.minMagHist.toFixed(1);
-      $("histCuerpo").classList.add("oculto");
-      $("histCargando").classList.remove("oculto");
-      $("histCargando").textContent='Cambió la región. Tocá "Cargar historial" para recalcular.';
-      if(mapa) mapa.setView(r.centro,r.zoom);
-      cargarCatalogo();
-      actualizarChips();
-    };
-    c.appendChild(b);
-  });
-}
-
-function construirCentros(){
-  var s=$("centro");
-  CENTROS.forEach(function(c,i){ var o=document.createElement("option"); o.value=i; o.textContent=c.n; s.appendChild(o); });
-  var o=document.createElement("option"); o.value="-1"; o.textContent="Mi ubicación"; s.appendChild(o);
-  s.value=String(cfg.centro);
-}
-
-function enlazar(){
-  document.querySelectorAll(".pestana").forEach(function(p){ p.onclick=function(){ cambiarVista(p.dataset.vista); }; });
-
-  $("minMag").value=cfg.minMag; $("minMagVal").textContent="M "+cfg.minMag.toFixed(1);
-  $("radio").value=cfg.radio;   $("radioVal").textContent=cfg.radio+" km";
-  $("minMagVista").value=cfg.minMagVista; $("minMagVistaVal").textContent="M "+cfg.minMagVista.toFixed(1);
-  $("magHist").value=reg().minMagHist; $("magHistVal").textContent="M "+reg().minMagHist.toFixed(1);
-
-  $("minMag").oninput=function(){ cfg.minMag=parseFloat(this.value); guardar.set("minMag",cfg.minMag);
-    $("minMagVal").textContent="M "+cfg.minMag.toFixed(1); };
-  $("radio").oninput=function(){ cfg.radio=parseInt(this.value,10); guardar.set("radio",cfg.radio);
-    $("radioVal").textContent=cfg.radio>=20000?"todo el mundo":cfg.radio+" km"; };
-  $("minMagVista").oninput=function(){ cfg.minMagVista=parseFloat(this.value); guardar.set("minMagVista",cfg.minMagVista);
-    $("minMagVistaVal").textContent="M "+cfg.minMagVista.toFixed(1); pintar(); };
-
-  $("centro").onchange=function(){
-    var i=parseInt(this.value,10);
-    if(i>=0){ cfg.centro=i; cfg.lat=CENTROS[i].lat; cfg.lon=CENTROS[i].lon;
-      guardar.set("centro",i); guardar.set("lat",cfg.lat); guardar.set("lon",cfg.lon); pintar(); }
-    else pedirUbicacion();
-  };
-  $("btnUbic").onclick=pedirUbicacion;
-
-  $("magHist").oninput=function(){ $("magHistVal").textContent="M "+parseFloat(this.value).toFixed(1); };
-  $("btnHist").onclick=cargarHistoria;
-  $("btnGlobal").onclick=function(){ cfg.radio=20000; guardar.set("radio",20000);
-    $("radio").value=20000; $("radioVal").textContent="todo el mundo"; };
-  $("btnRefrescar").onclick=function(){ sondear(); cargarCatalogo(); };
-  $("btnProbar").onclick=function(){ avisar({mag:5.2,dist:42,prof:12,lugar:"Prueba del sistema",ts:Date.now(),k:"prueba"}); };
-
-  var bs=$("btnSonido"); if(cfg.sonido) bs.classList.add("on");
-  bs.onclick=function(){ cfg.sonido=!cfg.sonido; guardar.set("sonido",cfg.sonido);
-    bs.classList.toggle("on",cfg.sonido); if(cfg.sonido) pitar(); };
-
-  var bn=$("btnNotif");
-  function refN(){ bn.classList.toggle("on",("Notification" in window)&&Notification.permission==="granted"); }
-  refN();
-  bn.onclick=function(){
-    if(!("Notification" in window)){ alert("Este navegador no soporta notificaciones."); return; }
-    Notification.requestPermission().then(refN);
-  };
-
-  var tmr;
-  window.addEventListener("resize",function(){ clearTimeout(tmr); tmr=setTimeout(function(){
-    pintar();
-    if(vista==="pronostico"&&grActual) dibujarGR(grActual.gr,grActual.evs.map(function(e){return e.mag;}),grActual.gr.mc);
-    if(vista==="historial"&&historia) dibujarAnual(historia.evs);
-  },200); });
-}
-
-function pedirUbicacion(){
-  if(!navigator.geolocation){ alert("Este navegador no comparte ubicación."); return; }
-  $("btnUbic").textContent="Buscando…";
-  navigator.geolocation.getCurrentPosition(function(p){
-    cfg.lat=p.coords.latitude; cfg.lon=p.coords.longitude; cfg.centro=-1;
-    guardar.set("lat",cfg.lat); guardar.set("lon",cfg.lon); guardar.set("centro",-1);
-    $("centro").value="-1"; $("btnUbic").textContent="Usar mi ubicación";
-    if(mapa) mapa.setView([cfg.lat,cfg.lon],7);
-    pintar();
-  },function(){
-    $("btnUbic").textContent="No se pudo obtener";
-    setTimeout(function(){ $("btnUbic").textContent="Usar mi ubicación"; },2500);
-  },{enableHighAccuracy:false,timeout:8000,maximumAge:600000});
-}
-
-/* =================== arranque =================== */
-construirChips();
-construirCentros();
-enlazar();
-iniciarMapa();
-estado("cargando",null);
-
-cargarCatalogo().then(sondear).then(function(){
-  arranque=false;
-  Object.keys(catalogo).forEach(function(k){ vistos[k]=1; });
-  abrirEMSC();
-});
-
-setInterval(sondear,45000);
-setInterval(cargarCatalogo,900000);
-setInterval(function(){ if(vista==="vivo") pintar(); },30000);
-document.addEventListener("visibilitychange",function(){ if(!document.hidden) sondear(); });
-
-})();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
-
