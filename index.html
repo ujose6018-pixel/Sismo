@@ -78,7 +78,7 @@ canvas{display:block}
 .ib[aria-pressed="true"]{color:var(--p3)}
 
 /* ═══════════════ selector de región ═══════════════ */
-.zona-sel{position:sticky;top:var(--cab);z-index:790;background:var(--chasis);
+.zona-sel{z-index:790;background:var(--chasis);
   border-bottom:1px solid var(--filo);overflow-x:auto;scrollbar-width:none}
 .zona-sel::-webkit-scrollbar{display:none}
 .zona-fila{display:flex;gap:0;width:max-content;min-width:100%;max-width:1360px;margin:0 auto;padding:0 16px}
@@ -95,10 +95,19 @@ canvas{display:block}
 
 /* ═══════════════ malla general ═══════════════ */
 .tablero{max-width:1360px;margin:0 auto;padding:0 16px}
+/* Movil: una sola columna, y el mapa sube justo debajo de la lectura
+   en vez de quedar sepultado al final de la pagina. */
+@media (max-width:999px){
+  .tablero{display:flex;flex-direction:column}
+  .col-a,.col-b{display:contents}
+  .registro{order:1} .lectura{order:2} .caja-mapa{order:3} .corte{order:4}
+  .rubro-ev{order:5} #lista{order:6} #btMas{order:7} #listaVacia{order:8} .escala{order:9}
+}
 @media (min-width:1000px){
   .tablero{display:grid;grid-template-columns:minmax(0,1fr) minmax(380px,440px);
     gap:20px;align-items:start;padding:0 16px 30px}
-  .col-b{position:sticky;top:calc(var(--cab) + 40px)}
+  .col-a{min-width:0}
+  .col-b{position:sticky;top:calc(var(--cab) + 14px)}
 }
 
 /* ═══════════════ helicorder: la tira de papel ═══════════════ */
@@ -233,8 +242,9 @@ table.tab td:first-child{font-family:"Bricolage Grotesque",sans-serif;font-weigh
   max-width:520px;margin:0 auto;background:var(--chasis-alto);border:1px solid var(--p0);
   border-radius:var(--r-g);box-shadow:0 14px 40px rgba(0,0,0,.65);padding:12px 14px;
   display:flex;gap:12px;align-items:center;cursor:pointer;
-  transform:translateY(-140%);transition:transform .45s cubic-bezier(.2,.9,.3,1)}
-#alertaViva.entra{transform:none}
+  transform:translateY(-140%);visibility:hidden;
+  transition:transform .45s cubic-bezier(.2,.9,.3,1),visibility 0s .45s}
+#alertaViva.entra{transform:none;visibility:visible;transition-delay:0s,0s}
 #alertaViva .chapa{width:46px;font-size:18px}
 #alertaViva .cuerpo p{font-size:13.5px;font-weight:600}
 #alertaViva .cerrar{margin-left:auto;color:var(--nota-baja);padding:6px;line-height:0}
@@ -256,6 +266,7 @@ select{width:100%;background:var(--chasis);border:1px solid var(--filo-vivo);col
 .bt:hover{border-color:var(--nota);color:var(--tiza);background:var(--chasis)}
 .bt.primario{border-color:var(--p3);color:var(--p3)}
 .bt.primario:hover{background:rgba(53,199,127,.1);color:var(--p3)}
+.bt.mas{display:block;width:100%;text-align:center;margin-top:14px}
 .bloque{background:var(--chasis);border:1px solid var(--filo);border-radius:var(--r-g);padding:16px;margin:16px 0}
 
 /* ═══════════════ navegación inferior ═══════════════ */
@@ -270,6 +281,7 @@ select{width:100%;background:var(--chasis);border:1px solid var(--filo-vivo);col
 .nav button[aria-current="true"]::before{content:"";position:absolute;top:0;left:26%;right:26%;
   height:2px;background:var(--p0);border-radius:0 0 2px 2px}
 @media (min-width:1000px){
+  .zona-sel{position:sticky;top:var(--cab)}
   body{padding-bottom:0}
   .nav{position:static;border-top:none;border-bottom:1px solid var(--filo);background:transparent;backdrop-filter:none}
   .nav-int{max-width:1360px;margin:0 auto;padding:0 16px;justify-content:flex-start;gap:2px}
@@ -384,8 +396,9 @@ select{width:100%;background:var(--chasis);border:1px solid var(--filo-vivo);col
         <p id="corteNota">—</p>
       </section>
 
-      <div class="rubro"><h2 id="tituloLista">Eventos</h2><span class="der" id="resumen">—</span></div>
+      <div class="rubro rubro-ev"><h2 id="tituloLista">Eventos</h2><span class="der" id="resumen">—</span></div>
       <ul class="pila" id="lista"></ul>
+      <button class="bt mas oculto" id="btMas">Ver más eventos</button>
       <div class="hueco oculto" id="listaVacia">
         <strong>Nada que mostrar con este filtro</strong>
         Bajá la magnitud mínima de visualización en Alertas, o elegí una región más amplia.
@@ -563,6 +576,1119 @@ select{width:100%;background:var(--chasis);border:1px solid var(--filo-vivo);col
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="app.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ═══════════════════ almacenamiento tolerante ═══════════════════ */
+var mem={};
+var disco={
+  get:function(k,d){try{var v=localStorage.getItem(k);return v===null?(k in mem?mem[k]:d):JSON.parse(v);}catch(e){return (k in mem)?mem[k]:d;}},
+  set:function(k,v){mem[k]=v;try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+};
+
+/* ═══════════════════ regiones ═══════════════════ */
+/* bbox = [latMin, latMax, lonMin, lonMax] */
+var REGIONES=[
+  {id:"mundo", n:"Mundo",            bbox:null,                       centro:[8,-70],   zoom:2, minMag:4.0, minMagHist:6.0},
+  {id:"latam", n:"Latinoamérica",    bbox:[-56,33,-118,-34],          centro:[-10,-72], zoom:3, minMag:3.5, minMagHist:5.5},
+  {id:"mex",   n:"México",           bbox:[14,33,-118,-86],           centro:[22,-102], zoom:5, minMag:2.5, minMagHist:4.5},
+  {id:"ca",    n:"Centroamérica",    bbox:[6,19,-93,-76],             centro:[13,-85],  zoom:5, minMag:2.5, minMagHist:4.5},
+  {id:"hn",    n:"Honduras",         bbox:[12.5,17.5,-90.5,-82.5],    centro:[15,-86.5],zoom:7, minMag:2.0, minMagHist:4.0},
+  {id:"caribe",n:"Caribe",           bbox:[9,25,-87,-58],             centro:[17,-72],  zoom:5, minMag:2.5, minMagHist:4.5},
+  {id:"andesn",n:"Andes del norte",  bbox:[-7,13,-82,-60],            centro:[3,-73],   zoom:5, minMag:2.5, minMagHist:4.5},
+  {id:"peru",  n:"Perú y Bolivia",   bbox:[-23,-2,-83,-63],           centro:[-12,-74], zoom:5, minMag:3.0, minMagHist:4.5},
+  {id:"chile", n:"Chile y Argentina",bbox:[-57,-17,-77,-60],          centro:[-35,-70], zoom:4, minMag:3.0, minMagHist:4.5},
+  {id:"brasil",n:"Brasil y Guayanas",bbox:[-34,6,-74,-34],            centro:[-12,-52], zoom:4, minMag:2.5, minMagHist:4.0}
+];
+
+var CENTROS=[
+  {n:"Tegucigalpa",lat:14.0723,lon:-87.1921},{n:"San Pedro Sula",lat:15.5041,lon:-88.0250},
+  {n:"La Ceiba",lat:15.7597,lon:-86.7822},{n:"Roatán",lat:16.32,lon:-86.53},
+  {n:"Choluteca",lat:13.30,lon:-87.19},{n:"Comayagua",lat:14.45,lon:-87.64},
+  {n:"Ciudad de México",lat:19.43,lon:-99.13},{n:"Guatemala",lat:14.63,lon:-90.51},
+  {n:"San Salvador",lat:13.69,lon:-89.19},{n:"Managua",lat:12.11,lon:-86.24},
+  {n:"San José",lat:9.93,lon:-84.08},{n:"Panamá",lat:8.98,lon:-79.52},
+  {n:"Bogotá",lat:4.71,lon:-74.07},{n:"Quito",lat:-0.18,lon:-78.47},
+  {n:"Lima",lat:-12.05,lon:-77.04},{n:"Santiago",lat:-33.45,lon:-70.67}
+];
+
+var cfg={
+  region:      disco.get("region","ca"),
+  minMag:      disco.get("minMag",4.5),
+  minMagVista: disco.get("minMagVista",2.5),
+  radio:       disco.get("radio",500),
+  lat:         disco.get("lat",14.0723),
+  lon:         disco.get("lon",-87.1921),
+  centro:      disco.get("centro",0),
+  sonido:      disco.get("sonido",false)
+};
+
+/* ═══════════════════ estado ═══════════════════ */
+var catalogo={}, vistos={}, arranque=true, seleccion=null;
+var mapa=null, capaEv=null, capaCaja=null, marcaYo=null;
+var vista="vivo", cargandoCat=false, grActual=null;
+var marcadores={}, ultimaLista=[], limiteLista=25;
+var historia=null, cargandoHist=false;
+var pocoMovimiento = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ═══════════════════ utilidades ═══════════════════ */
+function $(i){return document.getElementById(i);}
+function reg(){ for(var i=0;i<REGIONES.length;i++) if(REGIONES[i].id===cfg.region) return REGIONES[i]; return REGIONES[0]; }
+
+function distKm(a1,o1,a2,o2){
+  var R=6371,r=Math.PI/180,dA=(a2-a1)*r,dO=(o2-o1)*r;
+  var x=Math.sin(dA/2)*Math.sin(dA/2)+Math.cos(a1*r)*Math.cos(a2*r)*Math.sin(dO/2)*Math.sin(dO/2);
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function colorProf(k){ return k<30?"#FF4433":k<70?"#FF9500":k<150?"#F5C518":k<300?"#35C77F":"#3E9BFF"; }
+function radioMarca(m){ return Math.max(3.5,Math.pow(Math.max(m,0),1.85)*0.8); }
+function enCaja(e,b){ return !b || (e.lat>=b[0]&&e.lat<=b[1]&&e.lon>=b[2]&&e.lon<=b[3]); }
+
+function haceCuanto(t){
+  var s=Math.max(0,(Date.now()-t)/1000);
+  return s<60?"hace "+Math.round(s)+" s":s<3600?"hace "+Math.round(s/60)+" min":
+         s<86400?"hace "+Math.round(s/3600)+" h":"hace "+Math.round(s/86400)+" d";
+}
+function horaLocal(t){ return new Date(t).toLocaleString("es-HN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}); }
+function hhmm(t){ return new Date(t).toLocaleTimeString("es-HN",{hour:"2-digit",minute:"2-digit",hour12:false}); }
+
+/* intensidad percibida aproximada, escala tipo Mercalli */
+function intensidadAprox(m,d,p){ return 1.7*m-3.4*Math.log(Math.max(Math.sqrt(d*d+p*p),5))/Math.LN10+1.5; }
+function txtIntensidad(I){
+  return I<2?"no perceptible a esa distancia":I<3?"apenas perceptible, sobre todo en pisos altos":
+         I<4?"perceptible dentro de edificios":I<5?"sacudida clara, se mueven objetos colgantes":
+         I<6?"sacudida fuerte, despierta a la gente":I<7?"sacudida muy fuerte, posible daño leve":
+         "sacudida severa, daño probable en construcción vulnerable";
+}
+
+/* ═══════════════════ normalización ═══════════════════ */
+function clave(la,lo,t){ return Math.round(t/120000)+"|"+la.toFixed(1)+"|"+lo.toFixed(1); }
+
+function agregar(ev){
+  if(ev.mag===null||ev.mag===undefined||isNaN(ev.mag)) return false;
+  var k=clave(ev.lat,ev.lon,ev.ts); ev.k=k;
+  ev.dist=distKm(cfg.lat,cfg.lon,ev.lat,ev.lon);
+  var pre=catalogo[k];
+  if(pre){ if(pre.fuente==="USGS"&&ev.fuente!=="USGS") return false; ev.fresco=pre.fresco; catalogo[k]=ev; return false; }
+  catalogo[k]=ev; return true;
+}
+
+function leerGeoJSON(j){
+  var nuevos=[];
+  (j.features||[]).forEach(function(f){
+    if(!f.geometry||!f.geometry.coordinates) return;
+    var c=f.geometry.coordinates,p=f.properties||{};
+    if(p.type&&p.type!=="earthquake") return;
+    var ev={lat:c[1],lon:c[0],prof:c[2]==null?10:c[2],mag:p.mag,
+            lugar:p.place||"Sin descripción",ts:p.time,url:p.url,fuente:"USGS"};
+    if(agregar(ev)) nuevos.push(catalogo[ev.k]);
+  });
+  return nuevos;
+}
+
+/* ═══════════════════ red ═══════════════════ */
+function estado(t,ok){ $("estadoTxt").textContent=t; $("led").className="led"+(ok===true?" vivo":ok===false?" mal":""); }
+
+function cargarCatalogo(){
+  var r=reg();
+  cargandoCat=true; catalogo={}; seleccion=null;
+  estado("cargando "+r.n.toLowerCase(),null);
+  esqueletoPron(true);
+  var u="https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time"
+      +"&starttime="+new Date(Date.now()-30*864e5).toISOString()
+      +"&minmagnitude="+r.minMag+"&limit=2000";
+  if(r.bbox) u+="&minlatitude="+r.bbox[0]+"&maxlatitude="+r.bbox[1]+"&minlongitude="+r.bbox[2]+"&maxlongitude="+r.bbox[3];
+  return fetch(u).then(function(x){ if(!x.ok) throw 0; return x.json(); })
+    .then(function(j){ leerGeoJSON(j); cargandoCat=false; estado("en vivo",true); pintar(); calcularPronostico(); })
+    .catch(function(){ cargandoCat=false; estado("catálogo no disponible",false); pintar(); });
+}
+
+function sondear(){
+  return fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson",{cache:"no-store"})
+    .then(function(x){ if(!x.ok) throw 0; return x.json(); })
+    .then(function(j){ if(!cargandoCat) estado("en vivo",true); manejarNuevos(leerGeoJSON(j)); pintar(); })
+    .catch(function(){ estado("sin conexión al feed",false); });
+}
+
+function abrirEMSC(){
+  var ws;
+  try{ ws=new WebSocket("wss://www.seismicportal.eu/standing_order/websocket"); }catch(e){ return; }
+  ws.onmessage=function(m){
+    try{
+      var d=JSON.parse(m.data),p=d.data&&d.data.properties; if(!p) return;
+      var ev={lat:p.lat,lon:p.lon,prof:p.depth,mag:p.mag,lugar:p.flynn_region||"Sin descripción",
+              ts:new Date(p.time).getTime(),
+              url:"https://www.emsc-csem.org/Earthquake/earthquake.php?id="+p.unid,fuente:"EMSC"};
+      if(agregar(ev)) manejarNuevos([catalogo[ev.k]]);
+      pintar();
+    }catch(e){}
+  };
+  ws.onclose=function(){ setTimeout(abrirEMSC,20000); };
+  ws.onerror=function(){ try{ws.close();}catch(e){} };
+}
+
+/* ═══════════════════ alertas ═══════════════════ */
+var ctxA=null, tmrAlerta=null;
+function pitar(){
+  if(!cfg.sonido) return;
+  try{
+    ctxA=ctxA||new (window.AudioContext||window.webkitAudioContext)();
+    if(ctxA.state==="suspended") ctxA.resume();
+    [0,.32,.64].forEach(function(o){
+      var os=ctxA.createOscillator(),g=ctxA.createGain();
+      os.type="square"; os.frequency.value=o===0?880:1170;
+      g.gain.setValueAtTime(.0001,ctxA.currentTime+o);
+      g.gain.exponentialRampToValueAtTime(.16,ctxA.currentTime+o+.02);
+      g.gain.exponentialRampToValueAtTime(.0001,ctxA.currentTime+o+.24);
+      os.connect(g); g.connect(ctxA.destination);
+      os.start(ctxA.currentTime+o); os.stop(ctxA.currentTime+o+.26);
+    });
+  }catch(e){}
+}
+
+function mostrarAviso(ev){
+  var a=$("alertaViva");
+  $("avChapa").textContent=ev.mag.toFixed(1);
+  $("avChapa").style.background=colorProf(ev.prof);
+  $("avTitulo").textContent=ev.lugar;
+  $("avSub").textContent=Math.round(ev.dist)+" km de vos · "+Math.round(ev.prof)+" km de profundidad · "+hhmm(ev.ts);
+  a.classList.add("entra");
+  a.onclick=function(e){
+    if(e.target.closest("#avCerrar")) return;
+    cambiarVista("vivo"); seleccion=ev.k; pintar();
+    if(mapa) mapa.setView([ev.lat,ev.lon],Math.max(mapa.getZoom(),6));
+    window.scrollTo({top:0,behavior:pocoMovimiento?"auto":"smooth"});
+    ocultarAviso();
+  };
+  clearTimeout(tmrAlerta); tmrAlerta=setTimeout(ocultarAviso,9000);
+}
+function ocultarAviso(){ $("alertaViva").classList.remove("entra"); clearTimeout(tmrAlerta); }
+
+function onda(ev){
+  if(!mapa||pocoMovimiento) return;
+  try{
+    var i=L.divIcon({className:"onda",iconSize:[70,70],
+      html:"<div style='width:70px;height:70px;border-radius:50%;border:2px solid "+colorProf(ev.prof)+"'></div>"});
+    var m=L.marker([ev.lat,ev.lon],{icon:i,interactive:false}).addTo(mapa);
+    setTimeout(function(){ try{mapa.removeLayer(m);}catch(e){} },2500);
+  }catch(e){}
+}
+
+function avisar(ev){
+  var d=$("destello"); d.classList.add("on"); setTimeout(function(){d.classList.remove("on");},900);
+  pitar(); mostrarAviso(ev); onda(ev);
+  if(navigator.vibrate) try{navigator.vibrate([200,90,200]);}catch(e){}
+  if(("Notification" in window)&&Notification.permission==="granted"){
+    try{ new Notification("Sismo M"+ev.mag.toFixed(1)+" · "+Math.round(ev.dist)+" km",{
+      body:ev.lugar+"\n"+Math.round(ev.prof)+" km de profundidad · "+horaLocal(ev.ts),
+      tag:ev.k, renotify:true }); }catch(e){}
+  }
+}
+
+function manejarNuevos(nuevos){
+  if(arranque){ nuevos.forEach(function(e){vistos[e.k]=1;}); return; }
+  nuevos.forEach(function(ev){
+    if(vistos[ev.k]) return; vistos[ev.k]=1;
+    if(ev.mag>=cfg.minMag && ev.dist<=cfg.radio){ ev.fresco=Date.now(); avisar(ev); }
+  });
+}
+
+/* ═══════════════════ estadística sísmica ═══════════════════ */
+function magCompletitud(mags){
+  var h={},max=0,mc=0;
+  mags.forEach(function(m){ var b=Math.round(m*10)/10; h[b]=(h[b]||0)+1; });
+  for(var k in h){ if(h[k]>max){ max=h[k]; mc=parseFloat(k); } }
+  return Math.round((mc+0.2)*10)/10;
+}
+function valorB(mags,mc){
+  var sel=mags.filter(function(m){return m>=mc-1e-9;}), n=sel.length;
+  if(n<25) return null;
+  var media=sel.reduce(function(a,b){return a+b;},0)/n, den=media-(mc-0.05);
+  if(den<=0.05) return null;
+  var b=Math.log10(Math.E)/den;
+  var v=sel.reduce(function(a,m){return a+(m-media)*(m-media);},0)/(n*(n-1));
+  return {b:b, sig:2.30*b*b*Math.sqrt(Math.max(v,0)), a:Math.log10(n)+b*mc, n:n, mc:mc};
+}
+function esperados(gr,dias,M,T){ return Math.pow(10,gr.a-Math.log10(dias)-gr.b*M)*T; }
+function pPoisson(N){ return 1-Math.exp(-N); }
+
+var RJ={a:-1.67,b:0.91,p:1.08,c:0.05};
+function replicasEsperadas(Mm,M,t1,t2){
+  var K=Math.pow(10,RJ.a+RJ.b*(Mm-M));
+  return K*(Math.pow(t2+RJ.c,1-RJ.p)-Math.pow(t1+RJ.c,1-RJ.p))/(1-RJ.p);
+}
+
+function agrupar(evs,radio){
+  var fuente=evs.length>800?evs.slice().sort(function(a,b){return b.ts-a.ts;}).slice(0,800):evs;
+  var libres=fuente.slice().sort(function(a,b){return b.mag-a.mag;});
+  var grupos=[],usado={};
+  libres.forEach(function(sem){
+    if(usado[sem.k]) return;
+    var g=[sem]; usado[sem.k]=1;
+    libres.forEach(function(e){
+      if(usado[e.k]) return;
+      if(distKm(sem.lat,sem.lon,e.lat,e.lon)<=radio){ usado[e.k]=1; g.push(e); }
+    });
+    if(g.length>=4) grupos.push(g);
+  });
+  var ahora=Date.now();
+  return grupos.map(function(g){
+    var u7=g.filter(function(e){return e.ts>ahora-7*864e5;}).length;
+    var p7=g.filter(function(e){return e.ts<=ahora-7*864e5&&e.ts>ahora-14*864e5;}).length;
+    return {n:g.length, u7:u7, p7:p7,
+      mayor:g.reduce(function(a,b){return b.mag>a.mag?b:a;}),
+      ultimo:g.reduce(function(a,b){return b.ts>a.ts?b:a;}),
+      tend: u7>p7*1.5&&u7>=3?"sube":(u7<p7*0.6?"baja":"igual")};
+  }).sort(function(a,b){ return b.u7-a.u7 || b.n-a.n; });
+}
+
+/* ═══════════════════ helicorder: 4 franjas de 6 h ═══════════════════ */
+function pintarHelicorder(lista){
+  var c=$("helicorder"), dpr=window.devicePixelRatio||1, w=c.clientWidth, h=152;
+  if(w<40) return;
+  c.width=w*dpr; c.height=h*dpr;
+  var g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
+
+  var FR=4, hF=h/FR, Lm=44, pw=w-Lm-8;
+  var ahora=Date.now(), ini=ahora-864e5, tramo=864e5/FR;
+
+  g.fillStyle="#E9E0CC"; g.fillRect(0,0,w,h);
+
+  /* rejilla impresa */
+  g.font='9px "IBM Plex Mono",monospace'; g.textBaseline="middle";
+  for(var f=0;f<FR;f++){
+    var base=hF*(f+0.72);
+    g.strokeStyle="#CFC3A6"; g.lineWidth=1;
+    g.beginPath(); g.moveTo(Lm,base+.5); g.lineTo(w-8,base+.5); g.stroke();
+    /* marcas horarias cada 30 min */
+    for(var q=0;q<=12;q++){
+      var x=Lm+pw*q/12, alto=(q%2===0)?4:2;
+      g.beginPath(); g.moveTo(x+.5,base-alto); g.lineTo(x+.5,base+alto); g.stroke();
+    }
+    g.fillStyle="#8A7F66";
+    g.fillText(hhmm(ini+f*tramo), 5, base-1);
+    if(f<FR-1){ g.strokeStyle="rgba(43,42,38,.09)";
+      g.beginPath(); g.moveTo(0,hF*(f+1)+.5); g.lineTo(w,hF*(f+1)+.5); g.stroke(); }
+  }
+
+  /* trazos: ráfaga oscilatoria amortiguada por evento */
+  var vent=lista.filter(function(e){return e.ts>=ini;});
+  vent.forEach(function(ev){
+    var f=Math.min(FR-1,Math.floor((ev.ts-ini)/tramo));
+    var base=hF*(f+0.72);
+    var x=Lm+pw*(((ev.ts-ini)%tramo)/tramo);
+    var amp=hF*0.68*Math.pow(Math.min(Math.max(ev.mag,0.4),9)/9, 1.15);
+    var anchoT=Math.min(18, 4+Math.max(ev.mag,1)*1.4);
+    var sel=(ev.k===seleccion);
+    g.strokeStyle=colorProf(ev.prof);
+    g.lineWidth=sel?1.9:1.1;
+    g.globalAlpha=sel?1:.9;
+    g.beginPath();
+    for(var dx=-anchoT;dx<=anchoT;dx+=0.5){
+      var env=Math.exp(-Math.abs(dx)/(anchoT*0.42));
+      var y=base - amp*env*Math.sin(dx*1.35);
+      if(dx===-anchoT) g.moveTo(x+dx,y); else g.lineTo(x+dx,y);
+    }
+    g.stroke();
+    if(sel){ g.fillStyle=colorProf(ev.prof);
+      g.beginPath(); g.arc(x,base-amp-4,2.6,0,6.284); g.fill(); }
+  });
+  g.globalAlpha=1;
+
+  /* línea de ahora, al final de la última franja */
+  var xn=Lm+pw*(((ahora-ini)%tramo)/tramo), bn=hF*(FR-1+0.72);
+  g.strokeStyle="#C4342A"; g.lineWidth=1;
+  g.beginPath(); g.moveTo(xn+.5,bn-hF*0.6); g.lineTo(xn+.5,bn+hF*0.2); g.stroke();
+
+  $("regCuenta").textContent=vent.length+" eventos";
+
+  c.onclick=function(e){
+    var r=c.getBoundingClientRect(), px=e.clientX-r.left, py=e.clientY-r.top;
+    var f=Math.min(FR-1,Math.max(0,Math.floor(py/hF)));
+    var mej=null,dm=1e9;
+    vent.forEach(function(ev){
+      var ff=Math.min(FR-1,Math.floor((ev.ts-ini)/tramo));
+      if(ff!==f) return;
+      var x=Lm+pw*(((ev.ts-ini)%tramo)/tramo), d=Math.abs(x-px);
+      if(d<dm){ dm=d; mej=ev; }
+    });
+    if(mej&&dm<16){ seleccion=mej.k; pintar();
+      if(mapa) mapa.setView([mej.lat,mej.lon],Math.max(mapa.getZoom(),6)); }
+  };
+}
+
+/* ═══════════════════ corte en profundidad ═══════════════════ */
+function pintarCorte(lista){
+  var c=$("corteLienzo"), dpr=window.devicePixelRatio||1, w=c.clientWidth, h=190;
+  if(w<40) return;
+  c.width=w*dpr; c.height=h*dpr;
+  var g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle="#0E1620"; g.fillRect(0,0,w,h);
+
+  var evs=lista.filter(function(e){ return isFinite(e.prof)&&isFinite(e.lat)&&isFinite(e.lon); });
+  if(evs.length<6){
+    g.fillStyle="#546878"; g.font='11px "IBM Plex Mono",monospace';
+    g.fillText("Hacen falta más eventos para dibujar el perfil", 14, h/2);
+    $("corteEje").textContent="—";
+    $("corteNota").textContent="Con pocos hipocentros el corte no dice nada. Ampliá la región o bajá la magnitud mínima de visualización.";
+    return;
+  }
+
+  /* elegir el eje horizontal: el que mejor correlacione con la profundidad
+     (perpendicular a la fosa es donde se ve la placa hundirse) */
+  function corr(xs,ys){
+    var n=xs.length, mx=0,my=0;
+    for(var i=0;i<n;i++){ mx+=xs[i]; my+=ys[i]; } mx/=n; my/=n;
+    var sxy=0,sxx=0,syy=0;
+    for(i=0;i<n;i++){ var a=xs[i]-mx,b=ys[i]-my; sxy+=a*b; sxx+=a*a; syy+=b*b; }
+    return (sxx&&syy)?Math.abs(sxy/Math.sqrt(sxx*syy)):0;
+  }
+  var hondos=evs.filter(function(e){return e.prof>40;});
+  var muestra=hondos.length>=12?hondos:evs;
+  var prof=muestra.map(function(e){return e.prof;});
+  var usarLon = corr(muestra.map(function(e){return e.lon;}),prof) >= corr(muestra.map(function(e){return e.lat;}),prof);
+  var ejeN = usarLon?"longitud":"latitud";
+  function ejeX(e){ return usarLon?e.lon:e.lat; }
+
+  var xs=evs.map(ejeX);
+  var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs);
+  if(x1-x0<0.2){ x0-=0.5; x1+=0.5; }
+  var pMax=Math.max(60,Math.ceil(Math.max.apply(null,evs.map(function(e){return e.prof;}))/50)*50);
+
+  var L=40,R=10,T=16,B=22, pw=w-L-R, ph=h-T-B;
+  function X(v){ return L+pw*(v-x0)/(x1-x0); }
+  function Y(p){ return T+ph*Math.min(p,pMax)/pMax; }
+
+  /* rejilla de profundidad */
+  g.font='9px "IBM Plex Mono",monospace'; g.textBaseline="middle";
+  var pasos=[0,pMax*0.25,pMax*0.5,pMax*0.75,pMax];
+  pasos.forEach(function(p){
+    var y=Math.round(Y(p))+.5;
+    g.strokeStyle=p===0?"#2C4459":"#1E2E3F"; g.lineWidth=1;
+    g.beginPath(); g.moveTo(L,y); g.lineTo(w-R,y); g.stroke();
+    g.fillStyle="#546878"; g.fillText(Math.round(p)+(p===0?"":""), 4, y);
+  });
+  g.fillStyle="#546878"; g.font='8.5px "IBM Plex Mono",monospace';
+  g.fillText("km", 4, T-8);
+
+  /* superficie */
+  g.fillStyle="rgba(44,68,89,.35)"; g.fillRect(L,Y(0)-3,pw,3);
+
+  /* hipocentros, los más profundos primero para que los someros queden encima */
+  evs.slice().sort(function(a,b){return b.prof-a.prof;}).forEach(function(e){
+    var x=X(ejeX(e)), y=Y(e.prof), r=Math.max(1.6,Math.pow(Math.max(e.mag,0),1.7)*0.5);
+    var sel=(e.k===seleccion);
+    g.beginPath(); g.arc(x,y,sel?r+2:r,0,6.284);
+    g.fillStyle=colorProf(e.prof); g.globalAlpha=sel?1:.5; g.fill();
+    if(sel){ g.globalAlpha=1; g.strokeStyle="#EDF1F5"; g.lineWidth=1.4; g.stroke(); }
+  });
+  g.globalAlpha=1;
+
+  /* extremos del eje */
+  g.fillStyle="#546878"; g.font='9px "IBM Plex Mono",monospace'; g.textBaseline="alphabetic";
+  g.fillText(x0.toFixed(1)+"°", L, h-6);
+  var et=x1.toFixed(1)+"°";
+  g.fillText(et, w-R-g.measureText(et).width, h-6);
+
+  $("corteEje").textContent=ejeN+" · 0 a "+pMax+" km · "+evs.length+" hipocentros";
+  var hondo=evs.filter(function(e){return e.prof>70;}).length;
+  $("corteNota").innerHTML= hondo>evs.length*0.12
+    ? "Cada punto es un hipocentro visto de perfil. Esa banda que baja en diagonal es <b>la placa subduciendo</b>: "
+      + "los sismos siguen la losa oceánica mientras se hunde, por eso el color pasa de rojo a azul con la profundidad. "
+      + "Se llama zona de Wadati-Benioff."
+    : "Cada punto es un hipocentro visto de perfil. Acá casi todo es superficial (menos de 70 km), típico de fallas "
+      + "de desgarre y corteza continental — no hay una losa hundiéndose bajo esta zona.";
+}
+
+/* ═══════════════════ mapa ═══════════════════ */
+function iniciarMapa(){
+  if(typeof L==="undefined"){
+    $("mapa").innerHTML="<div class='hueco'><strong>El mapa no cargó</strong>"
+      +"Este visor bloquea la librería externa. El registro, la lista, el corte y las estadísticas funcionan igual.</div>";
+    $("mapa").style.height="auto";
+    return;
+  }
+  var r=reg();
+  mapa=L.map("mapa",{zoomControl:false,worldCopyJump:true,attributionControl:true}).setView(r.centro,r.zoom);
+  L.control.zoom({position:"bottomright"}).addTo(mapa);
+  var t=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    {attribution:"&copy; OpenStreetMap &copy; CARTO",maxZoom:18}).addTo(mapa);
+  var fallos=0;
+  t.on("tileerror",function(){
+    if(++fallos===6){ mapa.removeLayer(t);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"&copy; OpenStreetMap",maxZoom:18}).addTo(mapa); }
+  });
+  capaEv=L.layerGroup().addTo(mapa);
+  capaCaja=L.layerGroup().addTo(mapa);
+  marcaYo=L.circleMarker([cfg.lat,cfg.lon],{radius:5,color:"#EDF1F5",weight:2,fillOpacity:0})
+    .addTo(mapa).bindPopup("Mi punto de referencia");
+}
+
+function pintarMapa(lista){
+  if(!mapa) return;
+  capaEv.clearLayers(); capaCaja.clearLayers();
+  marcaYo.setLatLng([cfg.lat,cfg.lon]);
+  var b=reg().bbox;
+  if(b) L.rectangle([[b[0],b[2]],[b[1],b[3]]],
+    {color:"#3E9BFF",weight:1,fill:false,dashArray:"4 6",opacity:.35}).addTo(capaCaja);
+  marcadores={};
+  lista.forEach(function(ev){
+    var sel=(ev.k===seleccion);
+    var m=L.circleMarker([ev.lat,ev.lon],{radius:radioMarca(ev.mag),color:colorProf(ev.prof),
+      fillColor:colorProf(ev.prof),fillOpacity:sel?.6:.22,weight:sel?2.4:1.2}).addTo(capaEv);
+    m.bindPopup("<b>M "+ev.mag.toFixed(1)+"</b><br>"+ev.lugar+"<br><span style='color:#7B93A3'>"+
+      Math.round(ev.prof)+" km de profundidad · "+horaLocal(ev.ts)+"</span>");
+    m.on("click",function(){ marcar(ev.k); });
+    marcadores[ev.k]=m;
+  });
+}
+
+/* ═══════════════════ render principal ═══════════════════ */
+function pintarLectura(ev){
+  if(!ev){
+    $("agNum").textContent="—"; $("fLugar").textContent="Sin eventos en esta región";
+    $("fCuando").textContent=$("fProf").textContent=$("fDist").textContent=$("fFuente").textContent="—";
+    $("fSentir").textContent=""; $("agTipo").textContent="";
+    return;
+  }
+  $("agNum").textContent=ev.mag.toFixed(1);
+  $("agNum").style.color=colorProf(ev.prof);
+  $("agTipo").textContent=ev.prof<30?"superficial":ev.prof<70?"poco profundo":ev.prof<300?"intermedio":"profundo";
+  $("fLugar").textContent=ev.lugar;
+  $("fCuando").textContent=haceCuanto(ev.ts);
+  $("fProf").textContent=Math.round(ev.prof)+" km";
+  $("fDist").textContent=Math.round(distKm(cfg.lat,cfg.lon,ev.lat,ev.lon))+" km";
+  $("fFuente").textContent=ev.fuente;
+  $("fSentir").textContent="En tu punto de referencia: "+
+    txtIntensidad(intensidadAprox(ev.mag,ev.dist,ev.prof))+". Es una estimación aproximada, no un dato oficial.";
+}
+
+/* Cambiar de evento seleccionado solo repinta lo barato: la lectura, los dos
+   lienzos y el estilo de dos marcadores. Antes reconstruia lista y mapa enteros
+   en cada toque, que es lo que hacia sentir la app trabada en el movil. */
+function marcar(k){
+  var prev=seleccion, ev=catalogo[k];
+  if(!ev) return;
+  seleccion=k;
+  pintarLectura(ev);
+  var lis=$("lista").children;
+  for(var i=0;i<lis.length;i++){
+    if(lis[i].getAttribute("data-k")===k) lis[i].setAttribute("aria-selected","true");
+    else lis[i].removeAttribute("aria-selected");
+  }
+  [prev,k].forEach(function(kk){
+    var m=marcadores[kk];
+    if(m) m.setStyle({fillOpacity:kk===k?.6:.22, weight:kk===k?2.4:1.2});
+  });
+  pintarHelicorder(ultimaLista);
+  pintarCorte(ultimaLista);
+}
+
+/* Refresco ligero de los "hace X min" sin tocar el DOM completo. */
+function refrescarTiempos(){
+  var lis=$("lista").children;
+  for(var i=0;i<lis.length;i++){
+    var e=catalogo[lis[i].getAttribute("data-k")];
+    if(!e) continue;
+    var sm=lis[i].querySelector("small");
+    if(sm) sm.textContent=haceCuanto(e.ts)+" · "+Math.round(e.prof)+" km · "+e.fuente;
+  }
+  if(seleccion&&catalogo[seleccion]) $("fCuando").textContent=haceCuanto(catalogo[seleccion].ts);
+}
+
+function pintar(){
+  var r=reg();
+  var lista=Object.keys(catalogo).map(function(k){return catalogo[k];})
+    .filter(function(e){ return enCaja(e,r.bbox)&&e.mag>=cfg.minMagVista; })
+    .sort(function(a,b){ return b.ts-a.ts; });
+
+  if(!seleccion||!catalogo[seleccion]||!enCaja(catalogo[seleccion],r.bbox))
+    seleccion=lista.length?lista[0].k:null;
+  pintarLectura(seleccion?catalogo[seleccion]:null);
+
+  ultimaLista=lista;
+  var ul=$("lista"); ul.innerHTML="";
+  lista.slice(0,limiteLista).forEach(function(ev){
+    var li=document.createElement("li");
+    li.tabIndex=0; li.setAttribute("data-k",ev.k);
+    if(ev.k===seleccion) li.setAttribute("aria-selected","true");
+    if(ev.fresco&&Date.now()-ev.fresco<60000) li.className="fresco";
+    li.innerHTML="<span class='chapa' style='background:"+colorProf(ev.prof)+"'>"+ev.mag.toFixed(1)+"</span>"+
+      "<span class='cuerpo'><p></p><small>"+haceCuanto(ev.ts)+" · "+Math.round(ev.prof)+" km · "+ev.fuente+"</small></span>"+
+      "<span class='margen'>"+Math.round(distKm(cfg.lat,cfg.lon,ev.lat,ev.lon))+" km</span>";
+    li.querySelector("p").textContent=ev.lugar;
+    function elegir(){ marcar(ev.k);
+      if(mapa) mapa.setView([ev.lat,ev.lon],Math.max(mapa.getZoom(),6)); }
+    li.onclick=elegir;
+    li.onkeydown=function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); elegir(); } };
+    ul.appendChild(li);
+  });
+
+  var falta=lista.length-limiteLista;
+  $("btMas").classList.toggle("oculto",falta<=0);
+  if(falta>0) $("btMas").textContent="Ver "+Math.min(falta,50)+" eventos más";
+  $("listaVacia").classList.toggle("oculto",lista.length>0||cargandoCat);
+  $("tituloLista").textContent=r.n;
+  $("resumen").textContent=cargandoCat?"cargando…":
+    (lista.length?lista.length+" eventos · 30 días · M"+cfg.minMagVista.toFixed(1)+"+":"sin resultados");
+
+  pintarMapa(lista.slice(0, window.innerWidth<700?120:300));
+  pintarHelicorder(lista);
+  pintarCorte(lista);
+  actualizarZonas();
+}
+
+function actualizarZonas(){
+  var todos=Object.keys(catalogo).map(function(k){return catalogo[k];});
+  var btns=document.querySelectorAll(".zona");
+  for(var i=0;i<btns.length;i++){
+    var ch=btns[i], id=ch.getAttribute("data-id"), rr=null;
+    for(var j=0;j<REGIONES.length;j++) if(REGIONES[j].id===id) rr=REGIONES[j];
+    var act=(id===cfg.region);
+    ch.setAttribute("aria-current",act?"true":"false");
+    ch.querySelector("b").textContent = act
+      ? todos.filter(function(e){return enCaja(e,rr.bbox)&&e.ts>Date.now()-864e5;}).length : "";
+  }
+}
+
+/* ═══════════════════ pronóstico ═══════════════════ */
+function esqueletoPron(on){
+  $("pronCargando").classList.toggle("oculto",!on);
+  $("pronCuerpo").classList.toggle("oculto",on);
+}
+function avisoPron(txt){
+  $("pronCargando").innerHTML="<div class='hueco'><strong>No alcanza el catálogo</strong>"+txt+"</div>";
+  $("pronCargando").classList.remove("oculto");
+  $("pronCuerpo").classList.add("oculto");
+}
+
+function calcularPronostico(){
+  var evs=Object.keys(catalogo).map(function(k){return catalogo[k];})
+    .filter(function(e){ return enCaja(e,reg().bbox)&&e.ts>Date.now()-30*864e5; });
+  if(evs.length<40){
+    avisoPron("Esta zona tiene "+evs.length+" eventos en 30 días y hacen falta al menos 40 para que la estadística signifique algo. Probá una región más amplia.");
+    return;
+  }
+  var mags=evs.map(function(e){return e.mag;});
+  var mc=magCompletitud(mags), gr=valorB(mags,mc);
+  if(!gr){ avisoPron("No hay suficientes eventos por encima de M"+mc.toFixed(1)+" para ajustar el modelo."); return; }
+  grActual={gr:gr,evs:evs};
+  esqueletoPron(false);
+
+  var r=reg();
+  $("kb").textContent=gr.b.toFixed(2);
+  $("kb").style.color=gr.b<0.8?"#FF9500":gr.b>1.2?"#3E9BFF":"#EDF1F5";
+  $("kbSub").textContent="± "+gr.sig.toFixed(2)+" · "+(gr.b<0.8?"pocos chicos por cada grande":
+    gr.b>1.2?"muchos chicos por cada grande":"proporción típica");
+
+  var u7=evs.filter(function(e){return e.ts>Date.now()-7*864e5;}).length;
+  var p7=evs.filter(function(e){return e.ts<=Date.now()-7*864e5&&e.ts>Date.now()-14*864e5;}).length;
+  $("kRitmo").textContent=(evs.length/30).toFixed(1);
+  $("kRitmoSub").textContent="por día · esta semana "+(p7?((u7/p7-1)*100).toFixed(0)+"%":"—")+" vs la anterior";
+
+  $("kMag").textContent="M "+(gr.a/gr.b).toFixed(1);
+  $("kMagSub").textContent="este ritmo la produce ~1 vez cada 30 días";
+  $("kMc").textContent="M "+mc.toFixed(1);
+  $("kMcSub").textContent=gr.n+" eventos usados de "+evs.length;
+  $("probScope").textContent=r.n+" · desde M"+mc.toFixed(1);
+  $("repScope").textContent=r.n;
+
+  var tb=$("tablaProb"); tb.innerHTML="";
+  var base=Math.max(Math.ceil(mc*2)/2,3.5);
+  [base,base+1,base+1.5,base+2,base+2.5].forEach(function(M){
+    if(M>8.5) return;
+    var n7=esperados(gr,30,M,7), n30=esperados(gr,30,M,30);
+    var p7v=pPoisson(n7), p30=pPoisson(n30), porDia=esperados(gr,30,M,1);
+    var cada=porDia>0?1/porDia:Infinity;
+    var cTxt=!isFinite(cada)?"—":cada<1?(24*cada).toFixed(0)+" h":cada<60?cada.toFixed(1)+" d":
+      cada<730?(cada/30.4).toFixed(1)+" meses":cada<36500?(cada/365).toFixed(1)+" años":"más de un siglo";
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td>"+M.toFixed(1)+"</td>"+
+      "<td>"+(p7v*100).toFixed(p7v>0.1?0:1)+"%<div class='medidor'><i style='width:"+(p7v*100).toFixed(1)+"%'></i></div></td>"+
+      "<td>"+(p30*100).toFixed(p30>0.1?0:1)+"%<div class='medidor'><i style='width:"+(p30*100).toFixed(1)+"%'></i></div></td>"+
+      "<td style='color:var(--nota-baja)'>"+cTxt+"</td>";
+    tb.appendChild(tr);
+  });
+
+  $("pieGraf").innerHTML="Cada punto es cuántos sismos hubo de esa magnitud o más en 30 días. La recta es el ajuste "+
+    "log N = "+gr.a.toFixed(2)+" − "+gr.b.toFixed(2)+"·M. Donde los puntos se despegan por abajo a la izquierda, "+
+    "la red simplemente no detecta todo: por eso el cálculo arranca en <b>M"+mc.toFixed(1)+"</b>.";
+
+  dibujarGR(gr,mags,mc);
+  pintarReplicas(evs);
+  pintarZonasActivas(evs);
+}
+
+function etiquetaLog(e){
+  if(e===0) return "1";
+  var sup="⁰¹²³⁴⁵⁶⁷⁸⁹".split(""), t="";
+  String(e).split("").forEach(function(d){ t+=sup[+d]||""; });
+  return "10"+t;
+}
+
+function dibujarGR(gr,mags,mc){
+  var c=$("grafico"),dpr=window.devicePixelRatio||1,w=c.clientWidth,h=210;
+  if(w<40) return;
+  c.width=w*dpr; c.height=h*dpr;
+  var g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle="#0E1620"; g.fillRect(0,0,w,h);
+
+  var mMin=Math.floor(Math.min.apply(null,mags)*2)/2;
+  var mMax=Math.ceil(Math.max.apply(null,mags)*2)/2+0.2;
+  var pts=[];
+  for(var M=mMin;M<=mMax;M+=0.1){
+    var n=mags.filter(function(x){return x>=M-1e-9;}).length;
+    if(n>0) pts.push({m:M,y:Math.log10(n)});
+  }
+  if(!pts.length) return;
+  var yMax=Math.ceil(Math.max.apply(null,pts.map(function(p){return p.y;})))+0.2;
+  var L=40,R=10,T=14,B=24, pw=w-L-R, ph=h-T-B;
+  function X(m){ return L+pw*(m-mMin)/(mMax-mMin); }
+  function Y(y){ return T+ph*(1-y/yMax); }
+
+  g.font='9.5px "IBM Plex Mono",monospace'; g.textBaseline="middle";
+  for(var yy=0;yy<=yMax;yy++){
+    var py=Math.round(Y(yy))+.5;
+    g.strokeStyle="#1E2E3F"; g.beginPath(); g.moveTo(L,py); g.lineTo(w-R,py); g.stroke();
+    g.fillStyle="#546878"; g.fillText(etiquetaLog(yy),5,py);
+  }
+  g.textBaseline="alphabetic";
+  for(var mm=Math.ceil(mMin);mm<=mMax;mm++){
+    var px=Math.round(X(mm))+.5;
+    g.strokeStyle="#16212E"; g.beginPath(); g.moveTo(px,T); g.lineTo(px,T+ph); g.stroke();
+    g.fillStyle="#546878"; g.fillText("M"+mm,px-8,h-8);
+  }
+
+  g.strokeStyle="#FF9500"; g.lineWidth=1.7; g.setLineDash([5,4]);
+  g.beginPath();
+  g.moveTo(X(mMin),Y(Math.min(gr.a-gr.b*mMin,yMax)));
+  g.lineTo(X(mMax),Y(Math.max(gr.a-gr.b*mMax,0)));
+  g.stroke(); g.setLineDash([]);
+
+  pts.forEach(function(p){
+    var comp=p.m>=mc-1e-9;
+    g.fillStyle=comp?"#EDF1F5":"#3B4F60";
+    g.beginPath(); g.arc(X(p.m),Y(p.y),comp?2.7:1.8,0,6.284); g.fill();
+  });
+
+  var xm=Math.round(X(mc))+.5;
+  g.strokeStyle="#35C77F"; g.lineWidth=1; g.setLineDash([3,3]);
+  g.beginPath(); g.moveTo(xm,T); g.lineTo(xm,T+ph); g.stroke(); g.setLineDash([]);
+  g.fillStyle="#35C77F"; g.font='500 9.5px "IBM Plex Mono",monospace'; g.fillText("Mc",xm+4,T+10);
+}
+
+function pintarReplicas(evs){
+  var cont=$("replicas");
+  var cand=evs.filter(function(e){return e.mag>=5.0;}).sort(function(a,b){return b.mag-a.mag;});
+  if(!cand.length){
+    cont.innerHTML="<div class='hueco'><strong>Sin secuencia que modelar</strong>"+
+      "No hubo ningún sismo de M5.0 o más en los últimos 30 días en esta zona.</div>";
+    return;
+  }
+  var pri=cand[0];
+  var dias=(Date.now()-pri.ts)/864e5;
+  var radioRup=Math.max(40,Math.pow(10,0.5*pri.mag-1.8)*2);
+  var rep=evs.filter(function(e){ return e.ts>pri.ts&&distKm(pri.lat,pri.lon,e.lat,e.lon)<=radioRup; });
+  var mayorRep=rep.length?rep.reduce(function(a,b){return b.mag>a.mag?b:a;}).mag:null;
+
+  var filas="";
+  [pri.mag-2,pri.mag-1.5,pri.mag-1].forEach(function(M){
+    M=Math.round(M*10)/10; if(M<3) return;
+    var n=replicasEsperadas(pri.mag,M,dias,dias+7), p=pPoisson(n);
+    filas+="<tr><td>"+M.toFixed(1)+"</td><td>"+(p*100).toFixed(0)+"%"+
+      "<div class='medidor'><i style='width:"+(p*100).toFixed(0)+"%'></i></div></td>"+
+      "<td style='color:var(--nota-baja)'>"+n.toFixed(2)+" esperadas</td></tr>";
+  });
+
+  cont.innerHTML=
+    "<div class='f' style='margin-bottom:14px'>"+
+      "<span class='rotulo'>Sismo principal</span>"+
+      "<div class='v' style='color:"+colorProf(pri.prof)+"'>M "+pri.mag.toFixed(1)+"</div>"+
+      "<div class='s' style='margin-top:8px'>"+pri.lugar+"</div>"+
+      "<div class='s'>"+haceCuanto(pri.ts)+" · "+rep.length+" réplicas en "+Math.round(radioRup)+" km"+
+      (mayorRep!==null?" · mayor M"+mayorRep.toFixed(1):"")+"</div></div>"+
+    "<table class='tab'><thead><tr><th>Mag</th><th>Réplica en 7 días</th><th></th></tr></thead><tbody>"+filas+"</tbody></table>"+
+    "<p class='nota-pie'>Modelo de Reasenberg-Jones: las réplicas decaen como 1/tiempo (ley de Omori), por eso la "+
+    "probabilidad baja sola con los días. Por la ley de Båth, la réplica mayor de una secuencia ronda "+
+    "<b>M"+(pri.mag-1.2).toFixed(1)+"</b> — el principal menos 1.2. Es un promedio de muchas secuencias, no una regla.</p>";
+}
+
+function pintarZonasActivas(evs){
+  var cont=$("zonasAct");
+  var grupos=agrupar(evs,120).slice(0,8);
+  if(!grupos.length){
+    cont.innerHTML="<div class='hueco'><strong>Sin agrupaciones</strong>No hay racimos de al menos 4 eventos en esta zona.</div>";
+    return;
+  }
+  cont.innerHTML="";
+  grupos.forEach(function(g,i){
+    var d=document.createElement("div"); d.className="franja";
+    var cls=g.tend==="sube"?"p-sube":g.tend==="baja"?"p-baja":"p-igual";
+    var txt=g.tend==="sube"?"acelerando":g.tend==="baja"?"decayendo":"estable";
+    d.innerHTML="<span class='ord'>"+String(i+1).padStart(2,"0")+"</span>"+
+      "<span class='cuerpo'><p></p><small>"+g.n+" eventos · "+g.u7+" esta semana ("+g.p7+" la anterior) · mayor M"+
+      g.mayor.mag.toFixed(1)+" · último "+haceCuanto(g.ultimo.ts)+"</small></span>"+
+      "<span class='pastilla "+cls+"'>"+txt+"</span>";
+    d.querySelector("p").textContent=g.mayor.lugar;
+    d.onclick=function(){ irAEvento(g.mayor); };
+    cont.appendChild(d);
+  });
+}
+
+function irAEvento(ev){
+  cambiarVista("vivo");
+  if(ev.k&&catalogo[ev.k]) marcar(ev.k); else pintar();
+  if(mapa) mapa.setView([ev.lat,ev.lon],7);
+  window.scrollTo({top:0,behavior:pocoMovimiento?"auto":"smooth"});
+}
+
+/* ═══════════════════ historial ═══════════════════ */
+function partirCSV(l){
+  var out=[],cur="",q=false;
+  for(var i=0;i<l.length;i++){
+    var ch=l.charAt(i);
+    if(q){ if(ch==='"'){ if(l.charAt(i+1)==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else if(ch==='"') q=true;
+    else if(ch===','){ out.push(cur); cur=""; }
+    else cur+=ch;
+  }
+  out.push(cur); return out;
+}
+function leerCSV(txt){
+  var lin=txt.split("\n");
+  if(lin.length<2) return [];
+  var cab=partirCSV(lin[0]);
+  var iT=cab.indexOf("time"),iLa=cab.indexOf("latitude"),iLo=cab.indexOf("longitude"),
+      iP=cab.indexOf("depth"),iM=cab.indexOf("mag"),iL=cab.indexOf("place");
+  var out=[];
+  for(var i=1;i<lin.length;i++){
+    if(lin[i].length<20) continue;
+    var c=partirCSV(lin[i]), m=parseFloat(c[iM]), t=Date.parse(c[iT]);
+    if(isNaN(m)||isNaN(t)) continue;
+    out.push({ts:t,lat:parseFloat(c[iLa]),lon:parseFloat(c[iLo]),prof:parseFloat(c[iP])||0,
+              mag:m,lugar:(iL>=0?c[iL]:"")||"Sin descripción",fuente:"USGS"});
+  }
+  return out;
+}
+function energiaJ(m){ return Math.pow(10,1.5*m+4.8); }
+function fmtEnergia(J){
+  var t=J/4.184e9;
+  return t<1e3?t.toFixed(0)+" t":t<1e6?(t/1e3).toFixed(1)+" kt":(t/1e6).toFixed(1)+" Mt";
+}
+function estadoHist(titulo,texto){
+  $("histCargando").innerHTML="<strong>"+titulo+"</strong>"+texto;
+  $("histCargando").classList.remove("oculto");
+  $("histCuerpo").classList.add("oculto");
+}
+
+function cargarHistoria(){
+  if(cargandoHist) return;
+  var r=reg(), anio=parseInt($("desdeAnio").value,10), mm=parseFloat($("magHist").value);
+  cargandoHist=true;
+  estadoHist("Descargando","Catálogo de "+r.n+" desde "+anio+", magnitud M"+mm.toFixed(1)+" o mayor.");
+  var u="https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&orderby=time-asc"
+      +"&starttime="+anio+"-01-01&minmagnitude="+mm+"&limit=20000";
+  if(r.bbox) u+="&minlatitude="+r.bbox[0]+"&maxlatitude="+r.bbox[1]+"&minlongitude="+r.bbox[2]+"&maxlongitude="+r.bbox[3];
+  fetch(u).then(function(x){
+      if(x.status===400) throw new Error("La consulta devuelve demasiados eventos.");
+      if(!x.ok) throw new Error("El servicio del USGS no respondió.");
+      return x.text();
+    })
+    .then(function(t){
+      var evs=leerCSV(t); cargandoHist=false;
+      if(evs.length<30){
+        estadoHist("Muy pocos datos","Solo "+evs.length+" eventos con M"+mm.toFixed(1)+"+ en ese periodo. Bajá la magnitud mínima o ampliá el periodo.");
+        return;
+      }
+      historia={evs:evs,anio:anio,minMag:mm,region:r.id};
+      calcularHistoria();
+    })
+    .catch(function(e){
+      cargandoHist=false;
+      estadoHist("No se pudo cargar",e.message+" Subí la magnitud mínima o acortá el periodo y probá de nuevo.");
+    });
+}
+
+function calcularHistoria(){
+  if(!historia) return;
+  var evs=historia.evs, r=reg(), t1=Date.now();
+  var anios=(t1-evs[0].ts)/(365.25*864e5);
+  $("histCargando").classList.add("oculto");
+  $("histCuerpo").classList.remove("oculto");
+
+  var mayor=evs.reduce(function(a,b){return b.mag>a.mag?b:a;});
+  var Etot=evs.reduce(function(a,e){return a+energiaJ(e.mag);},0);
+
+  $("hAnios").textContent=anios.toFixed(1);
+  $("hAniosSub").textContent=evs.length+" eventos M"+historia.minMag.toFixed(1)+"+ desde "+historia.anio;
+  $("hMax").textContent="M "+mayor.mag.toFixed(1);
+  $("hMaxSub").textContent=new Date(mayor.ts).getFullYear()+" · "+mayor.lugar;
+  $("hRitmo").textContent=(evs.length/anios).toFixed(1);
+  $("hEnergia").textContent=fmtEnergia(Etot);
+  $("hEnergiaSub").textContent="en TNT · el mayor aportó "+(energiaJ(mayor.mag)/Etot*100).toFixed(0)+"%";
+  $("hScope").textContent=r.n+" · "+historia.anio+"–"+new Date().getFullYear();
+
+  var tb=$("tablaRec"); tb.innerHTML="";
+  for(var M=historia.minMag;M<=8.5;M+=0.5){
+    var Mr=Math.round(M*10)/10;
+    var sel=evs.filter(function(e){return e.mag>=Mr-1e-9;});
+    if(!sel.length) continue;
+    var interv=anios/sel.length, ult=sel[sel.length-1];
+    var desde=(t1-ult.ts)/(365.25*864e5), razon=desde/interv;
+    var iT=interv<1/12?(interv*365).toFixed(0)+" días":interv<1?(interv*12).toFixed(1)+" meses":interv.toFixed(1)+" años";
+    var dT=desde<1/12?(desde*365).toFixed(0)+" días":desde<1?(desde*12).toFixed(1)+" meses":desde.toFixed(1)+" años";
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td>"+Mr.toFixed(1)+"</td><td>"+sel.length+"</td><td>"+iT+
+      "</td><td style='color:"+(razon>2?"var(--p1)":"var(--nota-baja)")+"'>"+dT+
+      " <span style='opacity:.55'>("+razon.toFixed(1)+"×)</span></td>";
+    tb.appendChild(tr);
+  }
+  $("pieRec").innerHTML="La última columna compara el tiempo transcurrido contra el intervalo medio. Un 3.0× llama la "+
+    "atención, pero <b>no es una cuenta regresiva</b>: en un proceso de Poisson la probabilidad del próximo evento es la "+
+    "misma haya pasado un mes o una década. Los promedios además esconden muchísima dispersión — la misma falla puede "+
+    "repetir en 5 años o en 200.";
+
+  dibujarAnual(evs);
+
+  var paso=(r.id==="mundo"||r.id==="latam")?2:0.5, rej={};
+  evs.forEach(function(e){
+    var k=Math.floor(e.lat/paso)+"_"+Math.floor(e.lon/paso);
+    if(!rej[k]) rej[k]={n:0,max:null,lat:0,lon:0,E:0};
+    var c=rej[k]; c.n++; c.E+=energiaJ(e.mag); c.lat+=e.lat; c.lon+=e.lon;
+    if(!c.max||e.mag>c.max.mag) c.max=e;
+  });
+  var celdas=Object.keys(rej).map(function(k){var c=rej[k];c.lat/=c.n;c.lon/=c.n;return c;})
+    .sort(function(a,b){return b.n-a.n;}).slice(0,8);
+  $("hCeldaScope").textContent="celdas de "+paso+"° · "+Object.keys(rej).length+" ocupadas";
+  var cont=$("celdas"); cont.innerHTML=""; var maxN=celdas[0].n;
+  celdas.forEach(function(c,i){
+    var d=document.createElement("div"); d.className="franja";
+    d.innerHTML="<span class='ord'>"+String(i+1).padStart(2,"0")+"</span>"+
+      "<span class='cuerpo'><p></p><small>"+c.n+" eventos ("+(c.n/evs.length*100).toFixed(0)+"%) · mayor M"+
+      c.max.mag.toFixed(1)+" en "+new Date(c.max.ts).getFullYear()+" · "+fmtEnergia(c.E)+"</small>"+
+      "<div class='medidor' style='margin-top:6px'><i style='width:"+(c.n/maxN*100).toFixed(0)+"%'></i></div></span>";
+    d.querySelector("p").textContent=c.max.lugar;
+    d.onclick=function(){ irAEvento({lat:c.lat,lon:c.lon}); };
+    cont.appendChild(d);
+  });
+
+  var ul=$("listaGrandes"); ul.innerHTML="";
+  evs.slice().sort(function(a,b){return b.mag-a.mag;}).slice(0,10).forEach(function(ev){
+    var li=document.createElement("li");
+    li.innerHTML="<span class='chapa' style='background:"+colorProf(ev.prof)+"'>"+ev.mag.toFixed(1)+"</span>"+
+      "<span class='cuerpo'><p></p><small>"+
+      new Date(ev.ts).toLocaleDateString("es-HN",{year:"numeric",month:"short",day:"2-digit"})+
+      " · "+Math.round(ev.prof)+" km · "+fmtEnergia(energiaJ(ev.mag))+"</small></span>"+
+      "<span class='margen'>"+Math.round(distKm(cfg.lat,cfg.lon,ev.lat,ev.lon))+" km</span>";
+    li.querySelector("p").textContent=ev.lugar;
+    li.onclick=function(){ irAEvento(ev); };
+    ul.appendChild(li);
+  });
+}
+
+function dibujarAnual(evs){
+  var c=$("gAnual"),dpr=window.devicePixelRatio||1,w=c.clientWidth,h=210;
+  if(w<40) return;
+  c.width=w*dpr; c.height=h*dpr;
+  var g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle="#0E1620"; g.fillRect(0,0,w,h);
+
+  var a0=new Date(evs[0].ts).getFullYear(), a1=new Date().getFullYear(), a;
+  var porAnio={}, ben={};
+  for(a=a0;a<=a1;a++){ porAnio[a]=0; ben[a]=0; }
+  evs.forEach(function(e){
+    var y=new Date(e.ts).getFullYear();
+    if(porAnio[y]===undefined) return;
+    porAnio[y]++; ben[y]+=Math.sqrt(energiaJ(e.mag));
+  });
+  var acum={},E=0;
+  for(a=a0;a<=a1;a++){ E+=ben[a]; acum[a]=E; }
+
+  var anios=[]; for(a=a0;a<=a1;a++) anios.push(a);
+  var maxN=Math.max.apply(null,anios.map(function(y){return porAnio[y];}))||1;
+  var maxE=acum[a1]||1;
+  var L=36,R=10,T=12,B=24, pw=w-L-R, ph=h-T-B;
+  var bw=Math.max(1.5,pw/anios.length-2);
+
+  g.font='9.5px "IBM Plex Mono",monospace'; g.textBaseline="middle";
+  [0,.5,1].forEach(function(f){
+    var py=Math.round(T+ph*(1-f))+.5;
+    g.strokeStyle="#1E2E3F"; g.beginPath(); g.moveTo(L,py); g.lineTo(w-R,py); g.stroke();
+    g.fillStyle="#546878"; g.fillText(String(Math.round(maxN*f)),5,py);
+  });
+
+  anios.forEach(function(y,i){
+    var x=L+pw*i/anios.length, alt=ph*porAnio[y]/maxN;
+    g.fillStyle="#2C4459"; g.fillRect(x,T+ph-alt,bw,alt);
+  });
+
+  g.strokeStyle="#FF9500"; g.lineWidth=1.9; g.beginPath();
+  anios.forEach(function(y,i){
+    var x=L+pw*(i+0.5)/anios.length, py=T+ph*(1-acum[y]/maxE);
+    if(i) g.lineTo(x,py); else g.moveTo(x,py);
+  });
+  g.stroke();
+
+  g.textBaseline="alphabetic"; g.fillStyle="#546878";
+  g.fillText(String(a0),L,h-8);
+  var e1=String(a1); g.fillText(e1,w-R-g.measureText(e1).width,h-8);
+
+  var pico=anios.reduce(function(x,y){return porAnio[y]>porAnio[x]?y:x;},a0);
+  $("pieAnual").innerHTML="El año más activo fue <b>"+pico+"</b> con "+porAnio[pico]+" eventos. La línea naranja es "+
+    "la deformación acumulada de Benioff (raíz de la energía): los tramos planos son calma y los escalones son los "+
+    "sismos grandes. Cuidado al leer la tendencia: parte del aumento con los años es <b>más sismómetros</b>, no más sismos.";
+}
+
+/* ═══════════════════ navegación e interfaz ═══════════════════ */
+function cambiarVista(v){
+  vista=v;
+  ["vivo","pronostico","historial","alertas"].forEach(function(x){
+    $("v-"+x).classList.toggle("oculto",x!==v);
+  });
+  var b=document.querySelectorAll(".nav button");
+  for(var i=0;i<b.length;i++) b[i].setAttribute("aria-current", b[i].getAttribute("data-v")===v?"true":"false");
+  if(v==="vivo"){ setTimeout(function(){ if(mapa) mapa.invalidateSize(); pintar(); },40); }
+  if(v==="pronostico") calcularPronostico();
+  if(v==="historial"&&historia&&historia.region===cfg.region) calcularHistoria();
+}
+
+function construirZonas(){
+  var c=$("zonas");
+  REGIONES.forEach(function(r){
+    var b=document.createElement("button");
+    b.className="zona"; b.setAttribute("data-id",r.id); b.setAttribute("aria-current","false");
+    b.innerHTML=r.n+"<b></b>";
+    b.onclick=function(){
+      if(cfg.region===r.id) return;
+      cfg.region=r.id; disco.set("region",r.id);
+      historia=null; limiteLista=25;
+      $("magHist").value=r.minMagHist; $("magHistVal").textContent="M "+r.minMagHist.toFixed(1);
+      estadoHist("Cambió la región","Tocá “Cargar historial” para recalcular con "+r.n+".");
+      if(mapa) mapa.setView(r.centro,r.zoom);
+      cargarCatalogo(); actualizarZonas();
+      b.scrollIntoView({block:"nearest",inline:"center",behavior:pocoMovimiento?"auto":"smooth"});
+    };
+    c.appendChild(b);
+  });
+}
+
+function construirCentros(){
+  var s=$("centro");
+  CENTROS.forEach(function(c,i){
+    var o=document.createElement("option"); o.value=i; o.textContent=c.n; s.appendChild(o);
+  });
+  var o=document.createElement("option"); o.value="-1"; o.textContent="Mi ubicación"; s.appendChild(o);
+  s.value=String(cfg.centro);
+}
+
+function textoRadio(v){ return v>=20000?"todo el mundo":v+" km"; }
+
+function enlazar(){
+  var nb=document.querySelectorAll(".nav button");
+  for(var i=0;i<nb.length;i++)(function(b){ b.onclick=function(){ cambiarVista(b.getAttribute("data-v")); }; })(nb[i]);
+
+  $("minMag").value=cfg.minMag;           $("minMagVal").textContent="M "+cfg.minMag.toFixed(1);
+  $("radio").value=cfg.radio;             $("radioVal").textContent=textoRadio(cfg.radio);
+  $("minMagVista").value=cfg.minMagVista; $("minMagVistaVal").textContent="M "+cfg.minMagVista.toFixed(1);
+  $("magHist").value=reg().minMagHist;    $("magHistVal").textContent="M "+reg().minMagHist.toFixed(1);
+
+  $("minMag").oninput=function(){ cfg.minMag=parseFloat(this.value); disco.set("minMag",cfg.minMag);
+    $("minMagVal").textContent="M "+cfg.minMag.toFixed(1); };
+  $("radio").oninput=function(){ cfg.radio=parseInt(this.value,10); disco.set("radio",cfg.radio);
+    $("radioVal").textContent=textoRadio(cfg.radio); };
+  $("minMagVista").oninput=function(){ cfg.minMagVista=parseFloat(this.value); disco.set("minMagVista",cfg.minMagVista);
+    $("minMagVistaVal").textContent="M "+cfg.minMagVista.toFixed(1); pintar(); };
+
+  $("desdeAnio").onchange=function(){ $("desdeAnioVal").textContent=this.value; };
+  $("magHist").oninput=function(){ $("magHistVal").textContent="M "+parseFloat(this.value).toFixed(1); };
+  $("btHist").onclick=cargarHistoria;
+  $("btMas").onclick=function(){ limiteLista+=50; pintar(); };
+
+  $("centro").onchange=function(){
+    var i=parseInt(this.value,10);
+    if(i>=0){ cfg.centro=i; cfg.lat=CENTROS[i].lat; cfg.lon=CENTROS[i].lon;
+      disco.set("centro",i); disco.set("lat",cfg.lat); disco.set("lon",cfg.lon); pintar(); }
+    else pedirUbicacion();
+  };
+  $("btUbic").onclick=pedirUbicacion;
+  $("btGlobal").onclick=function(){ cfg.radio=20000; disco.set("radio",20000);
+    $("radio").value=20000; $("radioVal").textContent="todo el mundo"; };
+  $("btRefrescar").onclick=function(){ sondear(); cargarCatalogo(); };
+  $("btProbar").onclick=function(){
+    avisar({mag:5.2,dist:42,prof:12,lugar:"Prueba del sistema de alerta",ts:Date.now(),k:"prueba",fuente:"local"});
+  };
+
+  $("avCerrar").onclick=function(e){ e.stopPropagation(); ocultarAviso(); };
+
+  var bs=$("btSonido");
+  bs.setAttribute("aria-pressed",String(cfg.sonido));
+  bs.onclick=function(){ cfg.sonido=!cfg.sonido; disco.set("sonido",cfg.sonido);
+    bs.setAttribute("aria-pressed",String(cfg.sonido)); if(cfg.sonido) pitar(); };
+
+  var bn=$("btNotif");
+  function refN(){ bn.setAttribute("aria-pressed",
+    String(("Notification" in window)&&Notification.permission==="granted")); }
+  refN();
+  bn.onclick=function(){
+    if(!("Notification" in window)) return;
+    Notification.requestPermission().then(refN);
+  };
+
+  document.addEventListener("keydown",function(e){
+    if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    var m={"1":"vivo","2":"pronostico","3":"historial","4":"alertas"};
+    if(m[e.key]) cambiarVista(m[e.key]);
+    else if(e.key==="r"||e.key==="R"){ sondear(); cargarCatalogo(); }
+    else if(e.key==="s"||e.key==="S") bs.click();
+    else if(e.key==="Escape") ocultarAviso();
+  });
+
+  var t;
+  window.addEventListener("resize",function(){
+    clearTimeout(t); t=setTimeout(function(){
+      if(vista==="vivo") pintar();
+      if(vista==="pronostico"&&grActual) dibujarGR(grActual.gr,grActual.evs.map(function(e){return e.mag;}),grActual.gr.mc);
+      if(vista==="historial"&&historia) dibujarAnual(historia.evs);
+    },180);
+  });
+}
+
+function pedirUbicacion(){
+  if(!navigator.geolocation) return;
+  var b=$("btUbic"); b.textContent="Buscando…";
+  navigator.geolocation.getCurrentPosition(function(p){
+    cfg.lat=p.coords.latitude; cfg.lon=p.coords.longitude; cfg.centro=-1;
+    disco.set("lat",cfg.lat); disco.set("lon",cfg.lon); disco.set("centro",-1);
+    $("centro").value="-1"; b.textContent="Usar mi ubicación";
+    if(mapa) mapa.setView([cfg.lat,cfg.lon],7);
+    pintar();
+  },function(){
+    b.textContent="No se pudo obtener";
+    setTimeout(function(){ b.textContent="Usar mi ubicación"; },2600);
+  },{enableHighAccuracy:false,timeout:8000,maximumAge:600000});
+}
+
+/* ═══════════════════ arranque ═══════════════════ */
+construirZonas();
+construirCentros();
+enlazar();
+iniciarMapa();
+estado("cargando",null);
+
+cargarCatalogo().then(sondear).then(function(){
+  arranque=false;
+  Object.keys(catalogo).forEach(function(k){ vistos[k]=1; });
+  abrirEMSC();
+});
+
+setInterval(sondear,45000);
+setInterval(cargarCatalogo,900000);
+setInterval(function(){ if(vista==="vivo") refrescarTiempos(); },30000);
+document.addEventListener("visibilitychange",function(){ if(!document.hidden) sondear(); });
+
+})();
+
+</script>
 </body>
 </html>
